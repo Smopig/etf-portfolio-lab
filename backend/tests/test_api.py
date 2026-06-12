@@ -474,6 +474,20 @@ def test_ai_analyze_portfolio(client):
     assert response.json()["data"]["provider"] == "mock"
 
 
+def test_ai_analyze_portfolio_missing_target(client):
+    response = client.post("/api/ai/analyze-portfolio", json={})
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_ai_analyze_etf_unknown_symbol_insufficient_data(client):
+    response = client.post("/api/ai/analyze-etf", json={"symbol": "NOPE"})
+    assert response.status_code == 200
+    body = response.json()["data"]
+    assert "資料不足" in body["analysis_text"]
+    assert body["provider"] is None
+
+
 # ---------------------------------------------------------------------------
 # error envelope consistency
 # ---------------------------------------------------------------------------
