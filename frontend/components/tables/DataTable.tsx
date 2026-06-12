@@ -35,9 +35,9 @@ export interface DataTableEmptyState {
   actionHref?: string;
 }
 
-export interface DataTableProps {
+export interface DataTableProps<T extends object = Record<string, unknown>> {
   columns: Column[];
-  rows: Record<string, unknown>[];
+  rows: T[];
   searchable?: boolean;
   filters?: DataTableFilter[];
   exportCsv?: boolean;
@@ -45,6 +45,7 @@ export interface DataTableProps {
   loading?: boolean;
   dataDate?: string | null;
   title?: string;
+  onRowClick?: (row: T) => void;
 }
 
 function formatCell(value: unknown, column: Column): string {
@@ -84,7 +85,7 @@ function exportToCsv(columns: Column[], rows: Record<string, unknown>[]) {
   URL.revokeObjectURL(url);
 }
 
-export default function DataTable({
+export default function DataTable<T extends object = Record<string, unknown>>({
   columns,
   rows,
   searchable,
@@ -94,14 +95,18 @@ export default function DataTable({
   loading,
   dataDate,
   title,
-}: DataTableProps) {
+  onRowClick,
+}: DataTableProps<T>) {
+  // Internal record view: callers pass typed rows (T), but cell access is
+  // keyed by string column keys, so we operate on a record view internally.
+  const rowRecords = rows as ReadonlyArray<Record<string, unknown>>;
   const [search, setSearch] = useState("");
   const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   const filtered = useMemo(() => {
-    let result = rows;
+    let result: Record<string, unknown>[] = [...rowRecords];
 
     if (search.trim()) {
       const q = search.trim().toLowerCase();
@@ -221,7 +226,10 @@ export default function DataTable({
               {filtered.map((row, i) => (
                 <tr
                   key={i}
-                  className="h-9 border-b border-border-subtle text-body text-text-primary hover:bg-bg-surface-raised"
+                  onClick={onRowClick ? () => onRowClick(row as unknown as T) : undefined}
+                  className={`h-9 border-b border-border-subtle text-body text-text-primary hover:bg-bg-surface-raised ${
+                    onRowClick ? "cursor-pointer" : ""
+                  }`}
                 >
                   {columns.map((c) => (
                     <td
