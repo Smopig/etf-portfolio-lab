@@ -18,6 +18,7 @@ from pathlib import Path
 
 from app.core.database import SessionLocal
 from app.models import StockIndustry
+from app.utils.data_quality import run_and_report
 from app.utils.importers import ImportSummary, _clean, preserve_raw_file, read_table
 
 DATASET_TYPE = "stock_industry"
@@ -89,6 +90,8 @@ def run(args: argparse.Namespace) -> ImportSummary:
             except Exception as exc:  # noqa: BLE001
                 session.rollback()
                 summary.errors.append(f"row {idx}: {exc}")
+        if not args.dry_run:
+            summary.quality_summary = run_and_report(session, DATASET_TYPE)
     finally:
         session.close()
 
@@ -99,6 +102,8 @@ def main(argv=None) -> None:
     args = parse_args(argv)
     summary = run(args)
     summary.print_report()
+    if getattr(summary, "quality_summary", None):
+        print(summary.quality_summary)
     if summary.errors:
         sys.exit(1)
 

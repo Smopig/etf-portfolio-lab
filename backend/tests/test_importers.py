@@ -16,6 +16,7 @@ from sqlalchemy import MetaData, create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.models import (
+    DataQualityCheck,
     EtfDividend,
     EtfHolding,
     EtfHoldingSnapshot,
@@ -44,6 +45,7 @@ TABLES = [
     StockIndustry.__table__,
     EtfPrice.__table__,
     EtfDividend.__table__,
+    DataQualityCheck.__table__,
 ]
 
 
