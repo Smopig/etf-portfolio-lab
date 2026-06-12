@@ -459,16 +459,19 @@ def test_imports_status(client):
 # ---------------------------------------------------------------------------
 
 
-def test_ai_analyze_etf_not_implemented(client):
-    response = client.post("/api/ai/analyze-etf")
-    assert response.status_code == 501
-    assert response.json()["error"]["code"] == "NOT_IMPLEMENTED"
+def test_ai_analyze_etf(client):
+    response = client.post("/api/ai/analyze-etf", json={"symbol": "0050"})
+    assert response.status_code == 200
+    assert response.json()["data"]["provider"] == "mock"
 
 
-def test_ai_analyze_portfolio_not_implemented(client):
-    response = client.post("/api/ai/analyze-portfolio")
-    assert response.status_code == 501
-    assert response.json()["error"]["code"] == "NOT_IMPLEMENTED"
+def test_ai_analyze_portfolio(client):
+    response = client.post(
+        "/api/ai/analyze-portfolio",
+        json={"items": [{"etf_symbol": "0050", "target_weight": 100.0}]},
+    )
+    assert response.status_code == 200
+    assert response.json()["data"]["provider"] == "mock"
 
 
 # ---------------------------------------------------------------------------
