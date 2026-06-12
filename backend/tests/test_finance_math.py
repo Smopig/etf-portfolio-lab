@@ -1,8 +1,17 @@
+import datetime as dt
+
+import pytest
+
 from app.utils.finance_math import (
+    annualized_volatility,
+    cagr,
     effective_holdings,
     hhi,
+    max_drawdown,
     normalize_weights_to_fraction,
+    sharpe_ratio,
     top_n_weight,
+    xirr,
 )
 
 
@@ -56,3 +65,55 @@ def test_top_n_weight():
 def test_top_n_weight_empty():
     assert top_n_weight([], 5) == 0.0
     assert top_n_weight([0.5], 0) == 0.0
+
+
+# ---------------------------------------------------------------------------
+# Backtest metric helpers (Phase 7)
+# ---------------------------------------------------------------------------
+
+
+def test_cagr_one_year_doubling():
+    assert cagr(200.0, 100.0, 1.0) == pytest.approx(1.0)
+
+
+def test_cagr_two_year_doubling():
+    assert cagr(200.0, 100.0, 2.0) == pytest.approx(0.41421356, rel=1e-6)
+
+
+def test_cagr_degenerate():
+    assert cagr(200.0, 0.0, 1.0) == 0.0
+    assert cagr(200.0, 100.0, 0.0) == 0.0
+
+
+def test_max_drawdown_basic():
+    assert max_drawdown([100, 120, 90, 150]) == pytest.approx(-0.25)
+
+
+def test_max_drawdown_empty():
+    assert max_drawdown([]) == 0.0
+
+
+def test_annualized_volatility_constant_series():
+    assert annualized_volatility([100, 100, 100, 100]) == 0.0
+
+
+def test_annualized_volatility_basic_positive():
+    values = [100, 102, 99, 105, 103, 108]
+    vol = annualized_volatility(values)
+    assert vol > 0
+
+
+def test_sharpe_ratio_basic():
+    assert sharpe_ratio(0.1, 0.2, 0.02) == pytest.approx(0.4)
+
+
+def test_sharpe_ratio_zero_volatility():
+    assert sharpe_ratio(0.1, 0.0, 0.02) == 0.0
+
+
+def test_xirr_simple_two_flow():
+    import datetime as _dt
+
+    cashflows = [(_dt.date(2025, 1, 1), -100.0), (_dt.date(2026, 1, 1), 110.0)]
+    result = xirr(cashflows)
+    assert result == pytest.approx(0.10, abs=1e-3)
