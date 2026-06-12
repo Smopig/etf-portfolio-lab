@@ -47,29 +47,9 @@ from app.models import (
     EtfMaster,
     StockIndustry,
 )
+from app.utils.importers import _clean, _parse_date
 
 SAMPLES_DIR = Path("/data/samples")
-
-
-def _parse_date(value):
-    if value is None or (isinstance(value, float) and pd.isna(value)):
-        return None
-    if isinstance(value, str) and not value.strip():
-        return None
-    if isinstance(value, dt.date):
-        return value
-    return pd.to_datetime(value).date()
-
-
-def _clean(value):
-    """Convert NaN/empty to None."""
-    if value is None:
-        return None
-    if isinstance(value, float) and pd.isna(value):
-        return None
-    if isinstance(value, str) and value.strip() == "":
-        return None
-    return value
 
 
 def seed_data_source_registry(session) -> None:
