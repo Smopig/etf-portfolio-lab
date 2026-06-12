@@ -2,7 +2,17 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api import ai, backtests, data_import, data_sources, etfs, industries, portfolios, projections
+from app.api import (
+    ai,
+    backtests,
+    dashboard,
+    data_import,
+    data_sources,
+    etfs,
+    industries,
+    portfolios,
+    projections,
+)
 from app.api.responses import APIError
 from app.core.config import settings
 
@@ -56,6 +66,7 @@ app.include_router(projections.router, prefix="/api")
 app.include_router(data_sources.router, prefix="/api")
 app.include_router(data_import.router, prefix="/api")
 app.include_router(ai.router, prefix="/api")
+app.include_router(dashboard.router, prefix="/api")
 
 
 @app.get("/")

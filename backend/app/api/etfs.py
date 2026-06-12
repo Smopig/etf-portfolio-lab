@@ -11,6 +11,11 @@ from app.api.responses import not_found, ok, validation_error
 from app.core.database import get_db
 from app.models import EtfMaster
 from app.services.concentration_service import get_concentration, get_top_holdings
+from app.services.dashboard_service import (
+    RANKING_METRICS,
+    get_holdings_and_price_symbol_sets,
+    rank_etfs,
+)
 from app.services.etf_card_service import get_etf_card
 from app.services.exposure_service import get_industry_exposure
 from app.services.overlap_service import (
@@ -38,6 +43,7 @@ def list_etfs(
     if active is not None:
         query = query.filter(EtfMaster.is_active == active)
     rows = query.order_by(EtfMaster.symbol).all()
+    holdings_symbols, price_symbols = get_holdings_and_price_symbol_sets(db)
     data = [
         {
             "symbol": r.symbol,
@@ -46,10 +52,33 @@ def list_etfs(
             "asset_class": r.asset_class,
             "management_type": r.management_type,
             "is_active": r.is_active,
+            "has_holdings": r.symbol in holdings_symbols,
+            "has_price_data": r.symbol in price_symbols,
         }
         for r in rows
     ]
     return ok(data)
+
+
+@router.get("/ranking")
+def get_etfs_ranking(
+    metric: str = Query(...),
+    order: str = Query(default="desc"),
+    limit: int = Query(default=10, ge=1, le=100),
+    industry: str | None = Query(default=None),
+    level: int = Query(default=1, ge=1, le=2),
+    db: Session = Depends(get_db),
+) -> dict:
+    if metric not in RANKING_METRICS:
+        raise validation_error(
+            f"metric must be one of {', '.join(RANKING_METRICS)}."
+        )
+    if metric == "industry_exposure" and not industry:
+        raise validation_error("industry parameter is required for metric=industry_exposure.")
+    if order not in ("asc", "desc"):
+        raise validation_error("order must be 'asc' or 'desc'.")
+    results = rank_etfs(db, metric=metric, order=order, limit=limit, industry=industry, level=level)
+    return ok(results, meta={"metric": metric, "order": order, "limit": limit})
 
 
 @router.get("/compare")

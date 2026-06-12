@@ -150,6 +150,7 @@ def client(tmp_path):
             dataset_key="0050",
             check_name="weight_sum",
             status="PASS",
+            checked_at=dt.datetime(2026, 1, 1, 0, 0, 0),
         )
     )
 
@@ -487,3 +488,92 @@ def test_error_envelope_shape_validation(client):
     body = response.json()
     assert set(body.keys()) == {"error"}
     assert body["error"]["code"] == "VALIDATION_ERROR"
+
+
+# ---------------------------------------------------------------------------
+# dashboard / availability / ranking (Phase 9.5)
+# ---------------------------------------------------------------------------
+
+
+def test_dashboard_summary(client):
+    response = client.get("/api/dashboard/summary")
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["total_etfs"] == 3
+    assert data["active_etfs"] == 2
+    # 0050 and 006208 have holdings; 0099 does not
+    assert data["etfs_with_holdings"] == 2
+    # 0050 and 006208 have prices; 0099 does not
+    assert data["etfs_with_prices"] == 2
+    assert data["recent_quality_warnings"] == 0
+    assert data["last_updated"] is not None
+
+
+def test_list_etfs_has_availability_flags(client):
+    response = client.get("/api/etfs")
+    assert response.status_code == 200
+    by_symbol = {e["symbol"]: e for e in response.json()["data"]}
+    assert by_symbol["0050"]["has_holdings"] is True
+    assert by_symbol["0050"]["has_price_data"] is True
+    assert by_symbol["0099"]["has_holdings"] is False
+    assert by_symbol["0099"]["has_price_data"] is False
+
+
+def test_etfs_ranking_hhi_desc(client):
+    response = client.get("/api/etfs/ranking", params={"metric": "hhi"})
+    assert response.status_code == 200
+    body = response.json()
+    data = body["data"]
+    assert len(data) >= 2
+    symbols = [r["etf_symbol"] for r in data]
+    # 006208 (100% TSMC) is more concentrated than 0050 (50/50)
+    assert symbols.index("006208") < symbols.index("0050")
+    values = [r["value"] for r in data]
+    assert values == sorted(values, reverse=True)
+
+
+def test_etfs_ranking_industry_exposure(client):
+    response = client.get(
+        "/api/etfs/ranking", params={"metric": "industry_exposure", "industry": "Tech", "level": 1}
+    )
+    assert response.status_code == 200
+    data = response.json()["data"]
+    for row in data:
+        assert row["industry"] == "Tech"
+    # both 0050 and 006208 are 100% Tech
+    by_symbol = {r["etf_symbol"]: r for r in data}
+    assert by_symbol["0050"]["value"] == pytest.approx(1.0)
+    assert by_symbol["006208"]["value"] == pytest.approx(1.0)
+
+
+def test_etfs_ranking_requires_industry_for_industry_exposure(client):
+    response = client.get("/api/etfs/ranking", params={"metric": "industry_exposure"})
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_etfs_ranking_invalid_metric(client):
+    response = client.get("/api/etfs/ranking", params={"metric": "bogus"})
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_etfs_ranking_route_not_shadowed_by_symbol(client):
+    # /api/etfs/ranking must not be captured by /api/etfs/{symbol}
+    response = client.get("/api/etfs/ranking", params={"metric": "hhi"})
+    assert response.status_code == 200
+    body = response.json()
+    assert "error" not in body
+    assert isinstance(body["data"], list)
+
+
+def test_multi_overlap_pairs_include_rating_and_jaccard(client):
+    response = client.get("/api/etfs/compare", params={"symbols": "0050,006208"})
+    assert response.status_code == 200
+    pairs = response.json()["data"]["pairs"]
+    assert len(pairs) == 1
+    pair = pairs[0]
+    assert "overlap_rating" in pair
+    assert set(pair["overlap_rating"].keys()) == {"label", "value"}
+    assert "jaccard" in pair
+    assert 0.0 <= pair["jaccard"] <= 1.0

@@ -256,6 +256,8 @@ def get_multi_overlap(
                     "b": sym_j,
                     "weighted_overlap_pct": result["weighted_overlap_pct"],
                     "overlap_count": result["overlap_count"],
+                    "overlap_rating": result["overlap_rating"],
+                    "jaccard": result["jaccard"],
                 }
             )
 
