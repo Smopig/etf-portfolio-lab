@@ -1,0 +1,11 @@
+etf_symbol,holding_date,asset_symbol,asset_name,asset_type,weight,shares,market_value,source_name,source_url,confidence_level
+0050,2026-06-01,2330,台積電,股票,19.50,,,"公開資訊觀測站",https://mops.twse.gov.tw,中
+0050,2026-06-01,2317,鴻海,股票,9.80,,,"公開資訊觀測站",https://mops.twse.gov.tw,中
+0050,2026-06-01,2454,聯發科,股票,7.40,,,"公開資訊觀測站",https://mops.twse.gov.tw,中
+0050,2026-06-01,2308,台達電,股票,3.20,,,"公開資訊觀測站",https://mops.twse.gov.tw,中
+0050,2026-06-01,2882,國泰金,股票,4.10,,,"公開資訊觀測站",https://mops.twse.gov.tw,中
+0050,2026-06-01,2002,中鋼,股票,2.85,,,"公開資訊觀測站",https://mops.twse.gov.tw,中
+0050,2026-06-01,2887,玉山金,股票,3.05,,,"公開資訊觀測站",https://mops.twse.gov.tw,中
+0050,2026-06-01,1303,南亞,股票,2.40,,,"公開資訊觀測站",https://mops.twse.gov.tw,中
+0050,2026-06-01,2891,中信金,股票,2.65,,,"公開資訊觀測站",https://mops.twse.gov.tw,中
+0050,2026-06-01,3008,大立光,股票,1.95,,,"公開資訊觀測站",https://mops.twse.gov.tw,中

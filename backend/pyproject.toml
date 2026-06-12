@@ -1,0 +1,31 @@
+[project]
+name = "etf-portfolio-lab-backend"
+version = "0.1.0"
+description = "ETF Portfolio Lab backend (FastAPI)"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "sqlalchemy>=2.0",
+    "alembic",
+    "pydantic>=2",
+    "pydantic-settings",
+    "pandas",
+    "numpy",
+    "psycopg2-binary",
+    "openpyxl",
+    "python-dotenv",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "httpx",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
