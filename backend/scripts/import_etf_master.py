@@ -23,7 +23,7 @@ from pathlib import Path
 from app.core.database import SessionLocal
 from app.models import EtfMaster
 from app.utils.data_quality import run_and_report
-from app.utils.importers import ImportSummary, _clean, _parse_date, preserve_raw_file, read_table
+from app.utils.importers import ImportSummary, _clean, _num, _parse_date, preserve_raw_file, read_table
 
 DATASET_TYPE = "etf_master"
 
@@ -90,9 +90,9 @@ def run(args: argparse.Namespace) -> ImportSummary:
                         weighting_method=_clean(row.get("weighting_method")),
                         rebalance_frequency=_clean(row.get("rebalance_frequency")),
                         replication_method=_clean(row.get("replication_method")),
-                        expense_ratio=_clean(row.get("expense_ratio")),
-                        management_fee=_clean(row.get("management_fee")),
-                        custody_fee=_clean(row.get("custody_fee")),
+                        expense_ratio=_num(row.get("expense_ratio")),
+                        management_fee=_num(row.get("management_fee")),
+                        custody_fee=_num(row.get("custody_fee")),
                         dividend_frequency=_clean(row.get("dividend_frequency")),
                         source_name=_clean(row.get("source_name")) or args.source_name,
                         source_url=_clean(row.get("source_url")) or args.source_url,

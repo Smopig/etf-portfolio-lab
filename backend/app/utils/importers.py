@@ -47,6 +47,26 @@ def _clean(value):
     return value
 
 
+def _num(value):
+    """Convert a (possibly string) value to a native Python ``float``.
+
+    Returns ``None`` for empty/NaN/None values. Strips surrounding
+    whitespace and thousands separators so values read with ``dtype=str``
+    can be safely passed to numeric (psycopg2-adaptable) model fields.
+    """
+    value = _clean(value)
+    if value is None:
+        return None
+    if isinstance(value, str):
+        value = value.strip().replace(",", "")
+        if value == "":
+            return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def read_table(path: Path | str) -> pd.DataFrame:
     """Read a CSV or Excel file into a DataFrame.
 
@@ -58,13 +78,13 @@ def read_table(path: Path | str) -> pd.DataFrame:
     suffix = path.suffix.lower()
 
     if suffix in (".xlsx", ".xls"):
-        return pd.read_excel(path)
+        return pd.read_excel(path, dtype=str)
 
     if suffix == ".csv":
         last_error: Exception | None = None
         for encoding in CSV_ENCODINGS:
             try:
-                return pd.read_csv(path, encoding=encoding)
+                return pd.read_csv(path, encoding=encoding, dtype=str, keep_default_na=False)
             except (UnicodeDecodeError, UnicodeError) as exc:
                 last_error = exc
                 continue

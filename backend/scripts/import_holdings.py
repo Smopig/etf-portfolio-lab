@@ -29,7 +29,7 @@ from pathlib import Path
 from app.core.database import SessionLocal
 from app.models import EtfHolding, EtfHoldingSnapshot, EtfHoldingSnapshotItem
 from app.utils.data_quality import run_and_report
-from app.utils.importers import ImportSummary, _clean, _parse_date, preserve_raw_file, read_table
+from app.utils.importers import ImportSummary, _clean, _num, _parse_date, preserve_raw_file, read_table
 
 DATASET_TYPE = "etf_holdings"
 PARSER_VERSION = "import_holdings.v1"
@@ -128,9 +128,9 @@ def run(args: argparse.Namespace) -> ImportSummary:
                                 asset_symbol=asset_symbol,
                                 asset_name=_clean(row.get("asset_name")),
                                 asset_type=_clean(row.get("asset_type")),
-                                weight=_clean(row.get("weight")),
-                                shares=_clean(row.get("shares")),
-                                market_value=_clean(row.get("market_value")),
+                                weight=_num(row.get("weight")),
+                                shares=_num(row.get("shares")),
+                                market_value=_num(row.get("market_value")),
                             )
                         )
                         session.commit()
@@ -164,9 +164,9 @@ def run(args: argparse.Namespace) -> ImportSummary:
                         asset_symbol=asset_symbol,
                         asset_name=_clean(row.get("asset_name")),
                         asset_type=_clean(row.get("asset_type")),
-                        weight=_clean(row.get("weight")),
-                        shares=_clean(row.get("shares")),
-                        market_value=_clean(row.get("market_value")),
+                        weight=_num(row.get("weight")),
+                        shares=_num(row.get("shares")),
+                        market_value=_num(row.get("market_value")),
                         source_name=source_name,
                         source_url=source_url,
                         fetched_at=dt.datetime.utcnow(),

@@ -47,7 +47,14 @@ from app.models import (
     EtfMaster,
     StockIndustry,
 )
-from app.utils.importers import _clean, _parse_date
+from app.utils.importers import _clean, _num, _parse_date
+
+
+def _read_sample_csv(path: Path) -> pd.DataFrame:
+    """Read a sample CSV with all values as strings (preserves leading zeros,
+    avoids numpy dtypes that psycopg2 cannot adapt)."""
+    return pd.read_csv(path, dtype=str, keep_default_na=False)
+
 
 SAMPLES_DIR = Path("/data/samples")
 
@@ -55,7 +62,7 @@ SAMPLES_DIR = Path("/data/samples")
 def seed_data_source_registry(session) -> None:
     csv_path = SAMPLES_DIR / "data_source_registry.csv"
     if csv_path.exists():
-        df = pd.read_csv(csv_path)
+        df = _read_sample_csv(csv_path)
         for _, row in df.iterrows():
             source_name = _clean(row.get("source_name"))
             source_type = _clean(row.get("source_type"))
@@ -77,7 +84,8 @@ def seed_data_source_registry(session) -> None:
                     update_frequency=_clean(row.get("update_frequency")),
                     reliability_level=_clean(row.get("reliability_level")),
                     license_note=_clean(row.get("license_note")),
-                    enabled=bool(row.get("enabled", True)),
+                    enabled=str(row.get("enabled", "True")).strip().lower()
+                    not in ("false", "0", ""),
                 )
             )
         session.commit()
@@ -124,7 +132,7 @@ def seed_data_source_registry(session) -> None:
 def seed_etf_master(session) -> None:
     csv_path = SAMPLES_DIR / "etf_master.csv"
     if csv_path.exists():
-        df = pd.read_csv(csv_path)
+        df = _read_sample_csv(csv_path)
         for _, row in df.iterrows():
             symbol = _clean(row.get("symbol"))
             if not symbol:
@@ -148,9 +156,9 @@ def seed_etf_master(session) -> None:
                     weighting_method=_clean(row.get("weighting_method")),
                     rebalance_frequency=_clean(row.get("rebalance_frequency")),
                     replication_method=_clean(row.get("replication_method")),
-                    expense_ratio=_clean(row.get("expense_ratio")),
-                    management_fee=_clean(row.get("management_fee")),
-                    custody_fee=_clean(row.get("custody_fee")),
+                    expense_ratio=_num(row.get("expense_ratio")),
+                    management_fee=_num(row.get("management_fee")),
+                    custody_fee=_num(row.get("custody_fee")),
                     dividend_frequency=_clean(row.get("dividend_frequency")),
                     source_name=_clean(row.get("source_name")),
                     source_url=_clean(row.get("source_url")),
@@ -192,7 +200,7 @@ def seed_etf_master(session) -> None:
 def seed_holdings(session) -> None:
     csv_path = SAMPLES_DIR / "0050_holdings.csv"
     if csv_path.exists():
-        df = pd.read_csv(csv_path)
+        df = _read_sample_csv(csv_path)
         for _, row in df.iterrows():
             etf_symbol = _clean(row.get("etf_symbol")) or "0050"
             holding_date = _parse_date(row.get("holding_date"))
@@ -217,9 +225,9 @@ def seed_holdings(session) -> None:
                     asset_symbol=asset_symbol,
                     asset_name=_clean(row.get("asset_name")),
                     asset_type=_clean(row.get("asset_type")),
-                    weight=_clean(row.get("weight")),
-                    shares=_clean(row.get("shares")),
-                    market_value=_clean(row.get("market_value")),
+                    weight=_num(row.get("weight")),
+                    shares=_num(row.get("shares")),
+                    market_value=_num(row.get("market_value")),
                     source_name=_clean(row.get("source_name")),
                     source_url=_clean(row.get("source_url")),
                     fetched_at=dt.datetime.utcnow(),
@@ -263,7 +271,7 @@ def seed_holdings(session) -> None:
 def seed_stock_industry(session) -> None:
     csv_path = SAMPLES_DIR / "stock_industry.csv"
     if csv_path.exists():
-        df = pd.read_csv(csv_path)
+        df = _read_sample_csv(csv_path)
         for _, row in df.iterrows():
             stock_symbol = _clean(row.get("stock_symbol"))
             if not stock_symbol:

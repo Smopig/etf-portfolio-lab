@@ -22,7 +22,7 @@ from pathlib import Path
 from app.core.database import SessionLocal
 from app.models import EtfDividend
 from app.utils.data_quality import run_and_report
-from app.utils.importers import ImportSummary, _clean, _parse_date, preserve_raw_file, read_table
+from app.utils.importers import ImportSummary, _clean, _num, _parse_date, preserve_raw_file, read_table
 
 DATASET_TYPE = "etf_dividends"
 
@@ -89,8 +89,8 @@ def run(args: argparse.Namespace) -> ImportSummary:
                         etf_symbol=etf_symbol,
                         ex_dividend_date=ex_dividend_date,
                         payment_date=_parse_date(row.get("payment_date")),
-                        dividend_amount=_clean(row.get("dividend_amount")),
-                        dividend_yield=_clean(row.get("dividend_yield")),
+                        dividend_amount=_num(row.get("dividend_amount")),
+                        dividend_yield=_num(row.get("dividend_yield")),
                         source_name=source_name,
                         source_url=_clean(row.get("source_url")) or args.source_url,
                         fetched_at=dt.datetime.utcnow(),
