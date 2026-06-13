@@ -154,6 +154,15 @@ etf-portfolio-lab/
 6. **AI 解讀**：在「AI 分析」頁面獲取自動生成的分析摘要（需有資料）
 7. **檢查資料**：在「資料來源」頁面查看每個資料集的來源、日期、可信度
 
+## 一鍵抓取真實 ETF 清單與價格
+
+```bash
+docker compose exec backend python -m scripts.fetch_all
+```
+
+從 TWSE ISIN 公告網頁抓取全部台灣 ETF（上市＋上櫃）清單，並從 Yahoo Finance 抓取近期每日價格。
+需數分鐘完成；成分股（持股）尚未包含在此階段。詳見 [docs/DATA_IMPORT.md](docs/DATA_IMPORT.md)。
+
 ## 測試與品質檢查
 
 ### 執行後端測試

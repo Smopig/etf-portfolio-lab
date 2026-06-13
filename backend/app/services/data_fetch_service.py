@@ -20,7 +20,7 @@ import datetime as dt
 
 from sqlalchemy.orm import Session
 
-from app.models import EtfHolding, EtfPrice, FetchLog
+from app.models import EtfHolding, EtfMaster, EtfPrice, FetchLog
 from app.providers.data.base import BaseDataProvider
 from app.utils.data_quality import run_and_report
 from app.utils.importers import _parse_date
@@ -111,9 +111,58 @@ def _upsert_holding_row(session: Session, record: dict) -> bool:
     return True
 
 
+def _upsert_etf_master_row(session: Session, record: dict) -> bool:
+    """Insert an EtfMaster row if ``symbol`` is new; otherwise update basic fields.
+
+    Mirrors ``scripts/import_etf_master.py``'s insert-if-new logic, but on an
+    existing row also refreshes the non-null basic fields (name,
+    listing_date, source_name, source_url, data_date, fetched_at) without
+    clobbering any existing richer fields with ``None``.
+
+    Returns True if a new row was inserted.
+    """
+    symbol = record.get("symbol")
+    if not symbol:
+        return False
+
+    name = record.get("name")
+    listing_date = _parse_date(record.get("listing_date"))
+    data_date = _parse_date(record.get("data_date")) or dt.date.today()
+
+    existing = session.query(EtfMaster).filter_by(symbol=symbol).first()
+    if existing is None:
+        session.add(
+            EtfMaster(
+                symbol=symbol,
+                name=name or symbol,
+                listing_date=listing_date,
+                source_name=record.get("source_name"),
+                source_url=record.get("source_url"),
+                data_date=data_date,
+                fetched_at=dt.datetime.utcnow(),
+            )
+        )
+        return True
+
+    # Update only non-null basic fields; never clobber existing richer data.
+    if name:
+        existing.name = name
+    if listing_date is not None:
+        existing.listing_date = listing_date
+    if record.get("source_name"):
+        existing.source_name = record.get("source_name")
+    if record.get("source_url"):
+        existing.source_url = record.get("source_url")
+    if data_date is not None:
+        existing.data_date = data_date
+    existing.fetched_at = dt.datetime.utcnow()
+    return False
+
+
 _UPSERT_FUNCS = {
     "etf_prices": _upsert_price_row,
     "etf_holdings": _upsert_holding_row,
+    "etf_master": _upsert_etf_master_row,
 }
 
 
