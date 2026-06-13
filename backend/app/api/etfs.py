@@ -23,6 +23,7 @@ from app.services.overlap_service import (
     get_multi_overlap,
     get_pairwise_overlap,
 )
+from app.services.price_service import get_price_history
 
 router = APIRouter(prefix="/etfs", tags=["etfs"])
 
@@ -113,6 +114,17 @@ def get_holdings(
     db: Session = Depends(get_db),
 ) -> dict:
     return ok(get_top_holdings(db, symbol, holding_date=date, n=n))
+
+
+@router.get("/{symbol}/prices")
+def get_etf_prices(
+    symbol: str,
+    start: dt.date | None = Query(default=None),
+    end: dt.date | None = Query(default=None),
+    limit: int = Query(default=500, ge=1, le=5000),
+    db: Session = Depends(get_db),
+) -> dict:
+    return ok(get_price_history(db, symbol, start=start, end=end, limit=limit))
 
 
 @router.get("/{symbol}/concentration")

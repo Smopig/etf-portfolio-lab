@@ -7,6 +7,7 @@ import type {
   DataQualityCheck,
   DataSource,
   EtfCard,
+  EtfPriceHistory,
   FetchLog,
   EtfListItem,
   GoalSeekRequestPayload,
@@ -178,6 +179,19 @@ export async function getIndustryExposure(
     `/api/etfs/${encodeURIComponent(symbol)}/industry-exposure${qs({
       level: params?.level,
       date: params?.date,
+    })}`
+  );
+}
+
+export async function getEtfPrices(
+  symbol: string,
+  params?: { start?: string; end?: string; limit?: number }
+): Promise<EtfPriceHistory> {
+  return apiFetch<EtfPriceHistory>(
+    `/api/etfs/${encodeURIComponent(symbol)}/prices${qs({
+      start: params?.start,
+      end: params?.end,
+      limit: params?.limit,
     })}`
   );
 }
