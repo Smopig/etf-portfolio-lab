@@ -11,6 +11,13 @@ RUN uv sync --frozen --no-dev --no-install-project
 
 COPY app /code/app
 
+# migration 與資料載入所需檔案（entrypoint 會用到）
+COPY alembic.ini /code/alembic.ini
+COPY alembic /code/alembic
+COPY scripts /code/scripts
+COPY entrypoint.sh /code/entrypoint.sh
+RUN chmod +x /code/entrypoint.sh
+
 # 安裝專案本身
 RUN uv sync --frozen --no-dev
 
@@ -18,4 +25,5 @@ ENV PATH="/code/.venv/bin:$PATH"
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# 先跑 migration（可選 seed）再啟動 uvicorn
+CMD ["/code/entrypoint.sh"]
