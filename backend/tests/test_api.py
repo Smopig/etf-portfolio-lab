@@ -23,6 +23,7 @@ from app.models import (
     EtfHolding,
     EtfMaster,
     EtfPrice,
+    FetchLog,
     Portfolio,
     PortfolioItem,
     StockIndustry,
@@ -38,6 +39,7 @@ TABLES = [
     PortfolioItem.__table__,
     DataSourceRegistry.__table__,
     DataQualityCheck.__table__,
+    FetchLog.__table__,
 ]
 
 
@@ -444,6 +446,12 @@ def test_data_sources(client):
 
 def test_data_quality(client):
     response = client.get("/api/data-quality")
+    assert response.status_code == 200
+    assert "data" in response.json()
+
+
+def test_fetch_logs(client):
+    response = client.get("/api/data-sources/fetch-logs")
     assert response.status_code == 200
     assert "data" in response.json()
 

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.api.responses import ok
 from app.core.database import get_db
-from app.models import DataQualityCheck, DataSourceRegistry
+from app.models import DataQualityCheck, DataSourceRegistry, FetchLog
 
 router = APIRouter(tags=["data-sources"])
 
@@ -55,6 +55,38 @@ def list_data_quality(
             "severity": r.severity,
             "message": r.message,
             "checked_at": r.checked_at,
+        }
+        for r in rows
+    ]
+    return ok(data)
+
+
+@router.get("/data-sources/fetch-logs")
+def list_fetch_logs(
+    dataset_type: str | None = Query(default=None),
+    provider_name: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=500),
+    db: Session = Depends(get_db),
+) -> dict:
+    query = db.query(FetchLog)
+    if dataset_type is not None:
+        query = query.filter(FetchLog.dataset_type == dataset_type)
+    if provider_name is not None:
+        query = query.filter(FetchLog.provider_name == provider_name)
+    rows = query.order_by(FetchLog.id.desc()).limit(limit).all()
+    data = [
+        {
+            "id": r.id,
+            "provider_name": r.provider_name,
+            "dataset_type": r.dataset_type,
+            "status": r.status,
+            "rows_fetched": r.rows_fetched,
+            "rows_inserted": r.rows_inserted,
+            "source_url": r.source_url,
+            "data_date": r.data_date,
+            "message": r.message,
+            "started_at": r.started_at,
+            "finished_at": r.finished_at,
         }
         for r in rows
     ]

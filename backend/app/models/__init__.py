@@ -1,6 +1,7 @@
 from app.models.data_source import DataQualityCheck, DataSourceRegistry
 from app.models.dividend import EtfDividend
 from app.models.etf import EtfMaster
+from app.models.fetch_log import FetchLog
 from app.models.holding import (
     EtfHolding,
     EtfHoldingChangeEvent,
@@ -27,4 +28,5 @@ __all__ = [
     "ProjectionRun",
     "DataSourceRegistry",
     "DataQualityCheck",
+    "FetchLog",
 ]
