@@ -59,7 +59,10 @@ class YahooPriceProvider(BaseDataProvider):
         """Fetch daily prices for ``symbol``.
 
         Params:
-            symbol / etf_symbol: ticker symbol to query (required).
+            symbol: Yahoo ticker symbol to query (required), e.g. "0050.TW".
+            etf_symbol: bare ETF symbol to store on each record, e.g. "0050".
+                If not provided, derived from ``symbol`` by stripping any
+                exchange suffix (everything after the first ".").
             range: Yahoo "range" query param (default "1mo").
             interval: Yahoo "interval" query param (default "1d").
 
@@ -70,6 +73,7 @@ class YahooPriceProvider(BaseDataProvider):
             Empty + errors on any failure.
         """
         symbol = params.get("symbol") or params.get("etf_symbol")
+        stored_symbol = params.get("etf_symbol") or (symbol.split(".")[0] if symbol else symbol)
         date_range = params.get("range", "1mo")
         interval = params.get("interval", "1d")
 
@@ -137,7 +141,7 @@ class YahooPriceProvider(BaseDataProvider):
 
             records.append(
                 {
-                    "etf_symbol": symbol,
+                    "etf_symbol": stored_symbol,
                     "trade_date": trade_date,
                     "open": _at(opens, i),
                     "high": _at(highs, i),

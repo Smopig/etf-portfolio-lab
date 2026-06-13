@@ -108,6 +108,7 @@ def fetch_prices_for_symbols(session, symbols: list[str], date_range: str, limit
                     "etf_prices",
                     persist=True,
                     symbol=yahoo_symbol,
+                    etf_symbol=symbol,
                     range=date_range,
                 )
                 if summary["status"] == "success" and summary["rows_fetched"] > 0:
