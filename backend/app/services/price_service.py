@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime as dt
 from collections import Counter
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models import EtfPrice
@@ -66,3 +67,74 @@ def get_price_history(
         "data_end": rows[-1].trade_date.isoformat(),
         "points": points,
     }
+
+
+def get_latest_prices(session: Session, symbols: list[str] | None = None) -> dict[str, dict]:
+    """Return the latest close and previous close per ETF symbol in one query.
+
+    {
+      symbol: {"date", "close", "prev_close", "change", "change_pct"}
+    }
+
+    change_pct = (close - prev_close) / prev_close * 100, or None if there is
+    no previous close.
+    """
+    row_number = (
+        func.row_number()
+        .over(
+            partition_by=EtfPrice.etf_symbol,
+            order_by=EtfPrice.trade_date.desc(),
+        )
+        .label("rn")
+    )
+
+    subq = session.query(
+        EtfPrice.etf_symbol.label("etf_symbol"),
+        EtfPrice.trade_date.label("trade_date"),
+        EtfPrice.close.label("close"),
+        row_number,
+    )
+    if symbols is not None:
+        subq = subq.filter(EtfPrice.etf_symbol.in_(symbols))
+    subq = subq.subquery()
+
+    rows = (
+        session.query(
+            subq.c.etf_symbol,
+            subq.c.trade_date,
+            subq.c.close,
+            subq.c.rn,
+        )
+        .filter(subq.c.rn.in_((1, 2)))
+        .all()
+    )
+
+    by_symbol: dict[str, dict] = {}
+    for r in rows:
+        entry = by_symbol.setdefault(
+            r.etf_symbol, {"date": None, "close": None, "prev_close": None}
+        )
+        if r.rn == 1:
+            entry["date"] = r.trade_date.isoformat() if r.trade_date is not None else None
+            entry["close"] = float(r.close) if r.close is not None else None
+        else:
+            entry["prev_close"] = float(r.close) if r.close is not None else None
+
+    result: dict[str, dict] = {}
+    for symbol, entry in by_symbol.items():
+        close = entry["close"]
+        prev_close = entry["prev_close"]
+        change = None
+        change_pct = None
+        if close is not None and prev_close is not None and prev_close != 0:
+            change = close - prev_close
+            change_pct = change / prev_close * 100
+        result[symbol] = {
+            "date": entry["date"],
+            "close": close,
+            "prev_close": prev_close,
+            "change": change,
+            "change_pct": change_pct,
+        }
+
+    return result

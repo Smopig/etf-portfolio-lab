@@ -570,6 +570,24 @@ def test_list_etfs_has_availability_flags(client):
     assert by_symbol["0099"]["has_price_data"] is False
 
 
+def test_list_etfs_latest_price_and_change(client):
+    response = client.get("/api/etfs")
+    assert response.status_code == 200
+    by_symbol = {e["symbol"]: e for e in response.json()["data"]}
+
+    etf_0050 = by_symbol["0050"]
+    assert etf_0050["latest_close"] == 109.0
+    assert etf_0050["latest_date"] == "2026-01-10"
+    expected_change_pct = (109.0 - 108.0) / 108.0 * 100
+    assert etf_0050["change_pct"] == pytest.approx(expected_change_pct)
+
+    # ETF with no price data -> nulls
+    etf_0099 = by_symbol["0099"]
+    assert etf_0099["latest_close"] is None
+    assert etf_0099["latest_date"] is None
+    assert etf_0099["change_pct"] is None
+
+
 def test_etfs_ranking_hhi_desc(client):
     response = client.get("/api/etfs/ranking", params={"metric": "hhi"})
     assert response.status_code == 200

@@ -23,7 +23,7 @@ from app.services.overlap_service import (
     get_multi_overlap,
     get_pairwise_overlap,
 )
-from app.services.price_service import get_price_history
+from app.services.price_service import get_latest_prices, get_price_history
 
 router = APIRouter(prefix="/etfs", tags=["etfs"])
 
@@ -45,6 +45,7 @@ def list_etfs(
         query = query.filter(EtfMaster.is_active == active)
     rows = query.order_by(EtfMaster.symbol).all()
     holdings_symbols, price_symbols = get_holdings_and_price_symbol_sets(db)
+    latest_prices = get_latest_prices(db, symbols=[r.symbol for r in rows])
     data = [
         {
             "symbol": r.symbol,
@@ -55,6 +56,9 @@ def list_etfs(
             "is_active": r.is_active,
             "has_holdings": r.symbol in holdings_symbols,
             "has_price_data": r.symbol in price_symbols,
+            "latest_close": latest_prices.get(r.symbol, {}).get("close"),
+            "latest_date": latest_prices.get(r.symbol, {}).get("date"),
+            "change_pct": latest_prices.get(r.symbol, {}).get("change_pct"),
         }
         for r in rows
     ]

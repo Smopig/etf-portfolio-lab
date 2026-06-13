@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { ReactNode, useMemo, useState } from "react";
 import { EmptyState, LoadingSkeleton } from "@/components/common/States";
 import {
   formatCurrencyTWD,
@@ -20,6 +20,8 @@ export interface Column {
   sticky?: boolean;
   /** decimals for number/percent formats */
   decimals?: number;
+  /** optional custom cell renderer; overrides default formatCell output */
+  render?: (value: unknown, row: Record<string, unknown>) => ReactNode;
 }
 
 export interface DataTableFilter {
@@ -240,7 +242,7 @@ export default function DataTable<T extends object = Record<string, unknown>>({
                           : ""
                       } ${c.sticky ? "sticky left-0 z-10 bg-bg-surface font-mono-num" : ""}`}
                     >
-                      {formatCell(row[c.key], c)}
+                      {c.render ? c.render(row[c.key], row) : formatCell(row[c.key], c)}
                     </td>
                   ))}
                 </tr>
