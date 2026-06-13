@@ -245,6 +245,13 @@ ModuleNotFoundError: No module named 'app'
    ```
 
 3. **重新安裝專案**
+
+   推薦使用 uv（若尚未安裝：`curl -LsSf https://astral.sh/uv/install.sh | sh`）：
+   ```bash
+   uv sync --extra dev
+   ```
+
+   或使用 pip：
    ```bash
    pip install --upgrade pip
    pip install -e .

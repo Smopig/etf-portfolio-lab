@@ -25,21 +25,37 @@ psql --version            # 16 or higher
 cd backend
 ```
 
-### 1.2 建立 Python 虛擬環境
+### 1.2 建立環境並安裝依賴（推薦：uv）
+
+本專案推薦使用 [uv](https://docs.astral.sh/uv/) 管理 Python 環境與依賴，速度快且會產生鎖定檔（`uv.lock`）確保版本一致。
+
+若尚未安裝 uv：
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+建立虛擬環境並安裝依賴（含 dev 工具）：
+```bash
+uv venv
+uv sync --extra dev
+```
+
+驗證：
+```bash
+uv run python -c "import fastapi; print(fastapi.__version__)"
+```
+
+#### 或使用 pip（備用方案）
 
 ```bash
 python -m venv venv
 source venv/bin/activate  # macOS/Linux
 # 或
 venv\Scripts\activate     # Windows
-```
 
-### 1.3 安裝依賴
-
-```bash
 pip install --upgrade pip
-pip install -e .           # 安裝專案及其 dev 依賴
-pip install -e ".[dev]"    # 若包含開發工具（pytest等）
+pip install -e .           # 安裝專案及其依賴
+pip install -e ".[dev]"    # 包含開發工具（pytest 等）
 ```
 
 驗證：
@@ -91,7 +107,8 @@ createdb -U etf -h localhost etf
 #### 執行 Alembic 遷移
 
 ```bash
-alembic upgrade head
+uv run alembic upgrade head
+# 或使用 pip 安裝的環境：alembic upgrade head
 ```
 
 驗證：
@@ -115,20 +132,22 @@ psql -U etf -h localhost -d etf -c "\dt"
 
 ```bash
 # 匯入 ETF 基本資料
-python -m scripts.import_etf_master ../data/samples/etf_master.csv
+uv run python -m scripts.import_etf_master ../data/samples/etf_master.csv
 
 # 匯入成分股資料
-python -m scripts.import_holdings ../data/samples/0050_holdings.csv
+uv run python -m scripts.import_holdings ../data/samples/0050_holdings.csv
 
 # 匯入價格資料
-python -m scripts.import_prices ../data/samples/0050_prices.csv
+uv run python -m scripts.import_prices ../data/samples/0050_prices.csv
 
 # 匯入分紅資料
-python -m scripts.import_dividends ../data/samples/0050_dividends.csv
+uv run python -m scripts.import_dividends ../data/samples/0050_dividends.csv
 
 # 匯入產業分類
-python -m scripts.import_industry ../data/samples/stock_industry.csv
+uv run python -m scripts.import_industry ../data/samples/stock_industry.csv
 ```
+
+> 或使用 pip：將 `uv run python` 替換為 `python`（venv 已啟用）。
 
 驗證：
 ```bash
@@ -141,8 +160,9 @@ psql -U etf -h localhost -d etf -c "SELECT count(*) FROM etf_master;"
 ### 1.7 執行後端伺服器
 
 ```bash
-# 確保仍在 venv 環境下
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+# 或使用 pip 安裝的環境（確保已啟用 venv）：
+# uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 輸出應顯示：
@@ -222,14 +242,16 @@ npm run dev
 
 ```bash
 cd backend
-pytest tests/ -v
+uv run pytest tests/ -v
 
 # 或執行特定測試檔案
-pytest tests/test_api.py -v
+uv run pytest tests/test_api.py -v
 
 # 測試涵蓋範圍
-pytest tests/ --cov=app --cov-report=html
+uv run pytest tests/ --cov=app --cov-report=html
 ```
+
+> 或使用 pip 安裝的環境（venv 已啟用）：將 `uv run pytest` 替換為 `pytest`。
 
 ### 常見測試結果
 

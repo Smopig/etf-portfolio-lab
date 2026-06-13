@@ -160,7 +160,8 @@ etf-portfolio-lab/
 
 ```bash
 cd backend
-pytest tests/
+uv run pytest tests/
+# 或使用 pip 安裝的環境（venv 已啟用）：pytest tests/
 ```
 
 ### API 互動測試
