@@ -1,0 +1,94 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Background layers */
+  --bg-base: #0b0e14;
+  --bg-surface: #11161f;
+  --bg-surface-raised: #171d29;
+  --bg-inset: #0e1219;
+
+  /* Borders */
+  --border-subtle: #232a38;
+  --border-strong: #323b4e;
+
+  /* Text */
+  --text-primary: #e5e9f0;
+  --text-secondary: #9aa5b8;
+  --text-muted: #6b7484;
+
+  /* Accent */
+  --accent-primary: #3b82f6;
+  --accent-primary-hover: #5b9bf8;
+  --accent-secondary: #8b5cf6;
+
+  /* Semantic / status */
+  --status-success: #22c55e;
+  --status-warning: #f59e0b;
+  --status-error: #ef4444;
+  --status-info: #38bdf8;
+  --status-neutral: #475569;
+
+  /* Chart series palette (10 colors + unclassified) */
+  --series-1: #3b82f6;
+  --series-2: #22c55e;
+  --series-3: #f59e0b;
+  --series-4: #ef4444;
+  --series-5: #8b5cf6;
+  --series-6: #06b6d4;
+  --series-7: #eab308;
+  --series-8: #ec4899;
+  --series-9: #84cc16;
+  --series-10: #f97316;
+  --series-unclassified: #475569;
+
+  /* Backwards-compat aliases used by existing baseline */
+  --background: var(--bg-base);
+  --foreground: var(--text-primary);
+}
+
+html,
+body {
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Number/percent/symbol monospace */
+.font-mono-num {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/* Subtle pulse animation for loading skeletons */
+@keyframes pulse-subtle {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 1.2s ease-in-out infinite;
+}
+
+/* Scrollbar styling to match dark theme */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-inset);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 4px;
+}

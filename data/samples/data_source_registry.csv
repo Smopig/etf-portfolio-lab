@@ -1,0 +1,5 @@
+source_name,source_type,base_url,description,update_frequency,reliability_level,license_note,enabled
+公開資訊觀測站,OFFICIAL,https://mops.twse.gov.tw,台灣證券交易所官方資訊平台 - ETF持股、公告,每日,極高,台灣政府公開資訊,true
+台灣證券交易所 TWSE,OFFICIAL,https://www.twse.com.tw,上市公司產業分類與股票基本資訊,每日,極高,台灣政府公開資訊,true
+投信公司官網,FUND_COMPANY,https://www.fubonquant.com.tw,基金投信公司發行的官方資訊,每週,高,各公司內部資訊,true
+Yahoo Finance,THIRD_PARTY,https://finance.yahoo.com,第三方財經資料來源,每日,中,第三方提供資訊,false

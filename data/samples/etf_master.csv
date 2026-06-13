@@ -1,0 +1,4 @@
+symbol,name,issuer,listing_date,management_type,asset_class,investment_style,strategy_type,tracking_index,index_provider,selection_method,weighting_method,rebalance_frequency,replication_method,expense_ratio,management_fee,custody_fee,dividend_frequency,source_name,source_url,data_date,confidence_level
+0050,元大台灣50,元大投信,2003-06-30,被動,股票,大型股,指數追蹤,台灣50指數,台灣證券交易所,市值篩選,市值加權,每半年,完全複製,0.32,0.30,0.02,季配,公開資訊觀測站,https://mops.twse.gov.tw,2026-06-01,高
+006208,富邦台50,富邦投信,2012-12-03,被動,股票,大型股,指數追蹤,台灣50指數,台灣證券交易所,市值篩選,市值加權,每半年,完全複製,0.20,,0.02,季配,投信公司官網,https://www.fubonquant.com.tw,2026-06-01,中
+00878,國泰永續高股息,國泰投信,2020-04-23,被動,股票,高股息,篩選策略,台灣高股息指數,臺灣永續指數公司,獲利與股利篩選,股利加權,每年,最佳化複製,0.50,0.45,0.05,季配,公開資訊觀測站,https://mops.twse.gov.tw,2026-06-01,中
