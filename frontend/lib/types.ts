@@ -121,6 +121,26 @@ export interface IndustryExposure {
 }
 
 // ---------------------------------------------------------------------------
+// Price history
+// ---------------------------------------------------------------------------
+
+export interface EtfPricePoint {
+  date: string;
+  close: number | null;
+  adjusted_close: number | null;
+  volume: number | null;
+}
+
+export interface EtfPriceHistory {
+  symbol: string;
+  currency: string;
+  source_name: string | null;
+  data_start: string | null;
+  data_end: string | null;
+  points: EtfPricePoint[];
+}
+
+// ---------------------------------------------------------------------------
 // Overlap
 // ---------------------------------------------------------------------------
 

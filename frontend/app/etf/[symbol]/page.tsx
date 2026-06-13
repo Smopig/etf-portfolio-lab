@@ -9,8 +9,8 @@ import SourceFooter from "@/components/common/SourceFooter";
 import Badge, { BadgeTone } from "@/components/common/Badge";
 import DataTable, { Column } from "@/components/tables/DataTable";
 import { EmptyState, ErrorState, LoadingSkeleton, errorToFriendlyMessage } from "@/components/common/States";
-import { getEtfCard, getConcentration, getHoldings, getIndustryExposure } from "@/lib/api";
-import type { Concentration, EtfCard, Holding, IndustryExposure } from "@/lib/types";
+import { getEtfCard, getConcentration, getHoldings, getIndustryExposure, getEtfPrices } from "@/lib/api";
+import type { Concentration, EtfCard, EtfPriceHistory, Holding, IndustryExposure } from "@/lib/types";
 import { formatInteger, formatNumber, formatPercent } from "@/lib/format";
 
 const ReactECharts = dynamic(() => import("echarts-for-react"), { ssr: false });
@@ -76,6 +76,11 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
   const [cardState, setCardState] = useState<FetchState>("loading");
   const [cardErr, setCardErr] = useState<{ code: string; message: string } | null>(null);
 
+  // Price history (chart)
+  const [prices, setPrices] = useState<EtfPriceHistory | null>(null);
+  const [pricesState, setPricesState] = useState<FetchState>("loading");
+  const [pricesErr, setPricesErr] = useState<{ code: string; message: string } | null>(null);
+
   // Concentration
   const [concentration, setConcentration] = useState<Concentration | null>(null);
   const [concState, setConcState] = useState<FetchState>("loading");
@@ -107,6 +112,19 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
       .catch((e: unknown) => {
         setCardErr(errorToFriendlyMessage(e));
         setCardState("error");
+      });
+  }
+
+  function loadPrices() {
+    setPricesState("loading");
+    getEtfPrices(symbol, { limit: 1000 })
+      .then((data) => {
+        setPrices(data);
+        setPricesState(data.points.length === 0 ? "empty" : "ok");
+      })
+      .catch((e: unknown) => {
+        setPricesErr(errorToFriendlyMessage(e));
+        setPricesState("error");
       });
   }
 
@@ -164,12 +182,48 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
 
   useEffect(() => {
     loadCard();
+    loadPrices();
     loadConcentration();
     loadTop10();
     loadHoldings();
     loadExposure(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [symbol]);
+
+  const priceChartOption = useMemo(() => {
+    if (!prices) return null;
+    return {
+      grid: { left: 60, right: 20, top: 30, bottom: 40 },
+      tooltip: {
+        trigger: "axis",
+        formatter: (params: { axisValue: string; value: number }[]) => {
+          const p = params[0];
+          return `${p.axisValue}<br/>收盤價：${formatNumber(p.value, { decimals: 2 })}`;
+        },
+      },
+      xAxis: {
+        type: "category",
+        data: prices.points.map((p) => p.date),
+        axisLabel: { color: "var(--text-secondary)" },
+      },
+      yAxis: {
+        type: "value",
+        scale: true,
+        axisLabel: { color: "var(--text-secondary)" },
+      },
+      series: [
+        {
+          type: "line",
+          name: "收盤價",
+          data: prices.points.map((p) => p.close),
+          showSymbol: false,
+          smooth: true,
+          itemStyle: { color: "var(--series-1)" },
+          lineStyle: { color: "var(--series-1)" },
+        },
+      ],
+    };
+  }, [prices]);
 
   const top10ChartOption = useMemo(() => {
     const sorted = [...top10].sort((a, b) => a.weight_pct - b.weight_pct);
@@ -363,6 +417,33 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
             />
           </div>
         )}
+      </div>
+
+      {/* Price chart */}
+      <div className="mb-space-8">
+        <ChartCard
+          title="價格走勢（收盤價）"
+          unit="TWD"
+          dataDate={prices?.data_end ?? null}
+          explanation={
+            prices?.source_name
+              ? `資料來源：${prices.source_name}${prices.data_start ? `，資料區間：${prices.data_start} ~ ${prices.data_end}` : ""}。歷史價格不代表未來績效。`
+              : "歷史價格不代表未來績效。"
+          }
+          loading={pricesState === "loading"}
+          error={pricesState === "error" ? pricesErr : null}
+          retry={loadPrices}
+        >
+          {pricesState === "empty" && (
+            <EmptyState
+              title="尚無價格資料"
+              description="請執行 scripts.fetch_all 抓取 ETF 歷史價格資料。"
+            />
+          )}
+          {pricesState === "ok" && priceChartOption && (
+            <ReactECharts option={priceChartOption} style={{ width: "100%", height: "320px" }} />
+          )}
+        </ChartCard>
       </div>
 
       {/* Charts */}

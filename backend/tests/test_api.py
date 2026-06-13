@@ -219,6 +219,26 @@ def test_get_holdings(client):
     assert "data" in body
 
 
+def test_get_prices(client):
+    response = client.get("/api/etfs/0050/prices")
+    assert response.status_code == 200
+    body = response.json()["data"]
+    assert body["symbol"] == "0050"
+    assert len(body["points"]) == 10
+    dates = [p["date"] for p in body["points"]]
+    assert dates == sorted(dates)
+    assert all(isinstance(p["close"], float) for p in body["points"])
+    assert body["data_start"] == dates[0]
+    assert body["data_end"] == dates[-1]
+
+
+def test_get_prices_unknown_symbol(client):
+    response = client.get("/api/etfs/UNKNOWN/prices")
+    assert response.status_code == 200
+    body = response.json()["data"]
+    assert body["points"] == []
+
+
 def test_get_concentration(client):
     response = client.get("/api/etfs/0050/concentration")
     assert response.status_code == 200
