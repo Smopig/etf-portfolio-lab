@@ -22,7 +22,7 @@ from pathlib import Path
 from app.core.database import SessionLocal
 from app.models import EtfPrice
 from app.utils.data_quality import run_and_report
-from app.utils.importers import ImportSummary, _clean, _parse_date, preserve_raw_file, read_table
+from app.utils.importers import ImportSummary, _clean, _num, _parse_date, preserve_raw_file, read_table
 
 DATASET_TYPE = "etf_prices"
 
@@ -84,13 +84,13 @@ def run(args: argparse.Namespace) -> ImportSummary:
                     EtfPrice(
                         etf_symbol=etf_symbol,
                         trade_date=trade_date,
-                        open=_clean(row.get("open")),
-                        high=_clean(row.get("high")),
-                        low=_clean(row.get("low")),
-                        close=_clean(row.get("close")),
-                        adjusted_close=_clean(row.get("adjusted_close")),
-                        volume=_clean(row.get("volume")),
-                        turnover=_clean(row.get("turnover")),
+                        open=_num(row.get("open")),
+                        high=_num(row.get("high")),
+                        low=_num(row.get("low")),
+                        close=_num(row.get("close")),
+                        adjusted_close=_num(row.get("adjusted_close")),
+                        volume=_num(row.get("volume")),
+                        turnover=_num(row.get("turnover")),
                         source_name=source_name,
                         source_url=_clean(row.get("source_url")) or args.source_url,
                         fetched_at=dt.datetime.utcnow(),
