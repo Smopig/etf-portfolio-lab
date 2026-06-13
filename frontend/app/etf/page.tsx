@@ -6,6 +6,7 @@ import PageHeader from "@/components/layout/PageHeader";
 import { ErrorState, LoadingSkeleton, errorToFriendlyMessage } from "@/components/common/States";
 import DataTable, { Column } from "@/components/tables/DataTable";
 import { listEtfs } from "@/lib/api";
+import { formatCurrencyTWD, formatPercent } from "@/lib/format";
 import type { EtfListItem } from "@/lib/types";
 
 const COLUMNS: Column[] = [
@@ -14,6 +15,30 @@ const COLUMNS: Column[] = [
   { key: "issuer", label: "發行商", sortable: true },
   { key: "management_type", label: "管理類型", sortable: true },
   { key: "asset_class", label: "資產類別", sortable: true },
+  {
+    key: "latest_close",
+    label: "最新價",
+    sortable: true,
+    align: "right",
+    render: (value) =>
+      value === null || value === undefined ? "—" : formatCurrencyTWD(Number(value)),
+  },
+  {
+    key: "change_pct",
+    label: "漲跌幅",
+    sortable: true,
+    align: "right",
+    render: (value) => {
+      if (value === null || value === undefined) return "—";
+      const num = Number(value);
+      const color = num > 0 ? "#e23b3b" : num < 0 ? "#18a058" : undefined;
+      return (
+        <span style={{ color }} className={color ? undefined : "text-text-muted"}>
+          {formatPercent(num, { decimals: 2 })}
+        </span>
+      );
+    },
+  },
   { key: "has_holdings", label: "成分股資料", sortable: true },
   { key: "has_price_data", label: "價格資料", sortable: true },
 ];

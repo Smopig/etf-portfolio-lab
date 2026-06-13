@@ -43,6 +43,9 @@ export interface EtfListItem {
   is_active: boolean;
   has_holdings: boolean;
   has_price_data: boolean;
+  latest_close: number | string | null;
+  latest_date: string | null;
+  change_pct: number | string | null;
 }
 
 export interface Concentration {

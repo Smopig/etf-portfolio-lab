@@ -101,6 +101,12 @@ export function errorToFriendlyMessage(err: unknown): { code: string; message: s
   if (err instanceof ApiError) {
     const friendly = ERROR_MESSAGES[err.code] ?? ERROR_MESSAGES.INTERNAL_ERROR;
     if (err.code === "VALIDATION_ERROR" && err.message) {
+      if (/No price data for symbols|No common trading dates/i.test(err.message)) {
+        return {
+          code: err.code,
+          message: "此組合的標的尚無價格資料，請先執行 scripts.fetch_all 抓取，或改選有價格的 ETF。",
+        };
+      }
       return { code: err.code, message: `${friendly}（${err.message}）` };
     }
     return { code: err.code, message: friendly };

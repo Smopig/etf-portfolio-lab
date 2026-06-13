@@ -205,9 +205,13 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
     const dates = prices.points.map((p) => p.date);
     const volumes = prices.points.map((p) => p.volume ?? 0);
 
+    const AXIS_LABEL_COLOR = "#c2cad6";
+    const AXIS_LINE_COLOR = "#3a4250";
+    const SPLIT_LINE_COLOR = "#272d38";
+
     const sharedGrid = [
-      { left: 60, right: 20, top: 30, height: "55%" },
-      { left: 60, right: 20, top: "70%", height: "22%" },
+      { left: 60, right: 20, top: 30, height: "50%" },
+      { left: 60, right: 20, top: "64%", height: "20%" },
     ];
 
     const sharedXAxis = [
@@ -217,14 +221,16 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
         gridIndex: 0,
         axisLabel: { show: false },
         axisTick: { show: false },
+        axisLine: { lineStyle: { color: AXIS_LINE_COLOR } },
         splitLine: { show: false },
       },
       {
         type: "category",
         data: dates,
         gridIndex: 1,
-        axisLabel: { color: "var(--text-secondary)" },
-        axisLine: { onZero: false },
+        axisLabel: { color: AXIS_LABEL_COLOR },
+        axisLine: { onZero: false, lineStyle: { color: AXIS_LINE_COLOR } },
+        axisTick: { lineStyle: { color: AXIS_LINE_COLOR } },
         splitLine: { show: false },
       },
     ];
@@ -234,21 +240,45 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
         type: "value",
         scale: true,
         gridIndex: 0,
-        axisLabel: { color: "var(--text-secondary)" },
-        splitLine: { lineStyle: { color: "var(--border-subtle)" } },
+        axisLabel: { color: AXIS_LABEL_COLOR },
+        axisLine: { lineStyle: { color: AXIS_LINE_COLOR } },
+        axisTick: { lineStyle: { color: AXIS_LINE_COLOR } },
+        splitLine: { lineStyle: { color: SPLIT_LINE_COLOR } },
       },
       {
         type: "value",
         gridIndex: 1,
         axisLabel: {
-          color: "var(--text-secondary)",
+          color: AXIS_LABEL_COLOR,
           formatter: (value: number) => formatCompactVolume(value),
         },
+        axisLine: { lineStyle: { color: AXIS_LINE_COLOR } },
+        axisTick: { lineStyle: { color: AXIS_LINE_COLOR } },
         splitLine: { show: false },
       },
     ];
 
     const axisPointerLink = { link: [{ xAxisIndex: "all" }] };
+
+    const sharedDataZoom = [
+      { type: "inside", xAxisIndex: [0, 1], zoomOnMouseWheel: true, moveOnMouseMove: true, throttle: 50 },
+      {
+        type: "slider",
+        xAxisIndex: [0, 1],
+        height: 18,
+        bottom: 4,
+        borderColor: AXIS_LINE_COLOR,
+        backgroundColor: "#1c2129",
+        fillerColor: "rgba(90, 169, 255, 0.2)",
+        handleStyle: { color: "#5aa9ff", borderColor: "#5aa9ff" },
+        moveHandleStyle: { color: "#5aa9ff" },
+        textStyle: { color: AXIS_LABEL_COLOR },
+        dataBackground: {
+          lineStyle: { color: AXIS_LINE_COLOR },
+          areaStyle: { color: AXIS_LINE_COLOR },
+        },
+      },
+    ];
 
     if (priceChartType === "candlestick") {
       const volumeData = prices.points.map((p) => ({
@@ -258,6 +288,7 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
       return {
         grid: sharedGrid,
         axisPointer: axisPointerLink,
+        dataZoom: sharedDataZoom,
         tooltip: {
           trigger: "axis",
           formatter: (params: { axisValue: string; seriesName: string; data: number[] | { value: number; itemStyle?: unknown } }[]) => {
@@ -306,6 +337,7 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
     return {
       grid: sharedGrid,
       axisPointer: axisPointerLink,
+      dataZoom: sharedDataZoom,
       tooltip: {
         trigger: "axis",
         formatter: (params: { axisValue: string; seriesName: string; value: number }[]) => {
@@ -333,9 +365,9 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
           data: prices.points.map((p) => p.close),
           showSymbol: false,
           smooth: true,
-          itemStyle: { color: "var(--accent-primary)" },
-          lineStyle: { color: "var(--accent-primary)" },
-          areaStyle: { color: "var(--accent-primary)", opacity: 0.08 },
+          itemStyle: { color: "#5aa9ff" },
+          lineStyle: { color: "#5aa9ff", width: 2 },
+          areaStyle: { color: "#5aa9ff", opacity: 0.08 },
         },
         {
           type: "bar",
@@ -588,7 +620,7 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
                   K線
                 </button>
               </div>
-              <ReactECharts option={priceChartOption} style={{ width: "100%", height: "420px" }} />
+              <ReactECharts option={priceChartOption} style={{ width: "100%", height: "460px" }} />
             </div>
           )}
         </ChartCard>
