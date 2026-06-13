@@ -498,6 +498,20 @@ export interface FetchLog {
   finished_at: string | null;
 }
 
+export interface RefreshStatus {
+  running: boolean;
+  phase: string;
+  total: number;
+  processed: number;
+  succeeded: number;
+  failed: number;
+  started_at: string | null;
+  finished_at: string | null;
+  message: string;
+}
+
+export type RefreshStartResponse = RefreshStatus & { status: string };
+
 export interface DataQualityCheck {
   id: number;
   dataset_type: string;

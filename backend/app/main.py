@@ -7,6 +7,7 @@ from app.api import (
     backtests,
     dashboard,
     data_import,
+    data_refresh,
     data_sources,
     etfs,
     industries,
@@ -64,6 +65,7 @@ app.include_router(portfolios.router, prefix="/api")
 app.include_router(backtests.router, prefix="/api")
 app.include_router(projections.router, prefix="/api")
 app.include_router(data_sources.router, prefix="/api")
+app.include_router(data_refresh.router, prefix="/api")
 app.include_router(data_import.router, prefix="/api")
 app.include_router(ai.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")

@@ -15,17 +15,16 @@ Steps:
        if the first attempt yields no data) and upsert into ``etf_prices``.
 
 Holdings (成分股) are OUT OF SCOPE for this script.
+
+The core fetch logic lives in ``app.services.refresh_service.run_full_fetch``
+and is shared with the ``/api/data/refresh`` background-refresh endpoint.
 """
 
 from __future__ import annotations
 
 import argparse
-import time
 
-from app.core.database import SessionLocal
-from app.models import EtfMaster
-from app.providers.data.factory import get_data_provider
-from app.services.data_fetch_service import run_fetch
+from app.services.refresh_service import run_full_fetch
 
 
 def parse_args(argv=None) -> argparse.Namespace:
@@ -65,92 +64,27 @@ def parse_args(argv=None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def fetch_etf_list(session, market: str) -> list[str]:
-    print("=" * 60)
-    print("Step 1: fetching ETF master list from TWSE ISIN listing pages...")
-    provider = get_data_provider("twse-etf-list")
-    summary = run_fetch(session, provider, "etf_master", persist=True, market=market)
-
-    print(f"  status:        {summary['status']}")
-    print(f"  rows fetched:  {summary['rows_fetched']}")
-    print(f"  rows inserted: {summary['rows_inserted']}")
-    print(f"  source_url:    {summary['source_url']}")
-    print(f"  data_date:     {summary['data_date']}")
-    if summary["errors"]:
-        print(f"  errors:        {summary['errors']}")
-
-    symbols = [s for (s,) in session.query(EtfMaster.symbol).order_by(EtfMaster.symbol).all()]
-    print(f"  etf_master now has {len(symbols)} ETF symbol(s) total")
-    print("=" * 60)
-    return symbols
-
-
-def fetch_prices_for_symbols(session, symbols: list[str], date_range: str, limit: int | None) -> None:
-    if limit is not None:
-        symbols = symbols[:limit]
-
-    print("Step 2: fetching recent daily prices from Yahoo Finance...")
-    print(f"  symbols to process: {len(symbols)}  (range={date_range})")
-
-    n_total = len(symbols)
-    n_with_prices = 0
-    n_failures = 0
-
-    for i, symbol in enumerate(symbols, start=1):
-        provider = get_data_provider("yahoo-finance")
-        ok = False
-        try:
-            for suffix in (".TW", ".TWO"):
-                yahoo_symbol = f"{symbol}{suffix}"
-                summary = run_fetch(
-                    session,
-                    provider,
-                    "etf_prices",
-                    persist=True,
-                    symbol=yahoo_symbol,
-                    etf_symbol=symbol,
-                    range=date_range,
-                )
-                if summary["status"] == "success" and summary["rows_fetched"] > 0:
-                    ok = True
-                    print(
-                        f"  [{i}/{n_total}] {symbol}: OK via {yahoo_symbol} "
-                        f"({summary['rows_fetched']} rows, {summary['rows_inserted']} new)"
-                    )
-                    break
-            if not ok:
-                n_failures += 1
-                print(f"  [{i}/{n_total}] {symbol}: FAILED (no data from .TW or .TWO)")
-        except Exception as exc:  # noqa: BLE001
-            n_failures += 1
-            print(f"  [{i}/{n_total}] {symbol}: FAILED (exception: {exc})")
-
-        if ok:
-            n_with_prices += 1
-
-        time.sleep(0.4)
-
-    print("=" * 60)
-    print("Price fetch summary:")
-    print(f"  symbols processed: {n_total}")
-    print(f"  with prices:       {n_with_prices}")
-    print(f"  failures:          {n_failures}")
-    print("=" * 60)
-
-
 def main(argv=None) -> None:
     args = parse_args(argv)
 
-    session = SessionLocal()
-    try:
-        symbols = fetch_etf_list(session, args.market)
+    def progress(state: dict) -> None:
+        print(f"[progress] {state}")
 
-        if args.prices:
-            fetch_prices_for_symbols(session, symbols, args.range, args.limit)
-        else:
-            print("Skipping price fetch (--no-prices).")
-    finally:
-        session.close()
+    result = run_full_fetch(
+        progress=progress,
+        prices=args.prices,
+        price_range=args.range,
+        limit=args.limit,
+        market=args.market,
+    )
+
+    print("=" * 60)
+    print("Summary:")
+    print(f"  list_summary: {result['list_summary']}")
+    print(f"  symbols_total: {result['symbols_total']}")
+    if result["prices"]:
+        print(f"  prices: {result['prices']}")
+    print("=" * 60)
 
 
 if __name__ == "__main__":

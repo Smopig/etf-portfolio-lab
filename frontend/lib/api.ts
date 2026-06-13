@@ -6,6 +6,8 @@ import type {
   DashboardSummary,
   DataQualityCheck,
   DataSource,
+  RefreshStartResponse,
+  RefreshStatus,
   EtfCard,
   EtfPriceHistory,
   EtfPriceRange,
@@ -414,6 +416,22 @@ export async function listFetchLogs(params?: {
       limit: params?.limit,
     })}`
   );
+}
+
+export async function startDataRefresh(opts?: {
+  prices?: boolean;
+  range?: string;
+  limit?: number;
+  market?: string;
+}): Promise<RefreshStartResponse> {
+  return apiFetch<RefreshStartResponse>("/api/data/refresh", {
+    method: "POST",
+    body: JSON.stringify(opts ?? {}),
+  });
+}
+
+export async function getDataRefreshStatus(): Promise<RefreshStatus> {
+  return apiFetch<RefreshStatus>("/api/data/refresh/status");
 }
 
 export async function listDataQuality(params?: {
