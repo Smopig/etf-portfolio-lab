@@ -46,6 +46,49 @@ python -m scripts.run_quality_checks
 
 ---
 
+## 0. 一鍵抓取真實 ETF 清單與價格（fetch_all）
+
+### 功能
+
+只需一個指令，即可從公開資料來源抓取「台灣全部 ETF 清單」（上市 + 上櫃）並寫入
+`etf_master`，再為每一檔 ETF 抓取近期每日價格（OHLCV）寫入 `etf_prices`。
+
+成分股（持股／holdings）**不在此階段範圍內**，仍需透過 `import_holdings` 另行匯入。
+
+### 資料來源
+
+- ETF 清單：台灣證券交易所 ISIN 公告網頁
+  - 上市：`https://isin.twse.com.tw/isin/C_public.jsp?strMode=2`
+  - 上櫃：`https://isin.twse.com.tw/isin/C_public.jsp?strMode=4`
+- 每日價格：Yahoo Finance（依序嘗試 `<代碼>.TW`、`<代碼>.TWO`）
+
+### 執行方式
+
+此指令需要連線網路，請在已啟動的 Docker 容器內執行：
+
+```bash
+docker compose exec backend python -m scripts.fetch_all
+```
+
+常用參數：
+
+```text
+--prices / --no-prices   是否抓取價格（預設：抓取）
+--range RANGE            Yahoo 價格區間，預設 1y（如 1mo, 1y, 5y）
+--limit N                只處理前 N 檔 ETF（測試用）
+--market listed|otc|both 抓取上市／上櫃／兩者（預設 both）
+```
+
+### 注意事項
+
+- 整個流程（含全部 ETF 的價格抓取）可能需要數分鐘，請耐心等候。
+- 每次抓取都會寫入一筆 `FetchLog`，標示來源、日期與成功/失敗狀態；
+  若某檔 ETF 抓取失敗，不會產生假資料，僅記錄錯誤並繼續下一檔。
+- 抓取結果與錯誤可在前端「資料來源」頁面查看，亦會即時輸出於終端機。
+- 本指令**不包含成分股（holdings）**資料。
+
+---
+
 ## 1. ETF 主檔（etf_master）
 
 ### 功能
