@@ -21,7 +21,7 @@ def get_price_history(
 
     {
       symbol, currency, source_name, data_start, data_end,
-      points: [{date, close, adjusted_close, volume}, ...]
+      points: [{date, open, high, low, close, adjusted_close, volume}, ...]
     }
     """
     query = session.query(EtfPrice).filter(EtfPrice.etf_symbol == etf_symbol)
@@ -48,6 +48,9 @@ def get_price_history(
     points = [
         {
             "date": r.trade_date.isoformat(),
+            "open": float(r.open) if r.open is not None else None,
+            "high": float(r.high) if r.high is not None else None,
+            "low": float(r.low) if r.low is not None else None,
             "close": float(r.close) if r.close is not None else None,
             "adjusted_close": float(r.adjusted_close) if r.adjusted_close is not None else None,
             "volume": float(r.volume) if r.volume is not None else None,

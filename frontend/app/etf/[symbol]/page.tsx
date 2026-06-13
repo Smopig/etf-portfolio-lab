@@ -96,6 +96,9 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
   const [holdingsState, setHoldingsState] = useState<FetchState>("loading");
   const [holdingsErr, setHoldingsErr] = useState<{ code: string; message: string } | null>(null);
 
+  // Price chart type toggle (線圖 / K線)
+  const [priceChartType, setPriceChartType] = useState<"line" | "candlestick">("candlestick");
+
   // Industry exposure (chart, with level toggle)
   const [level, setLevel] = useState<1 | 2>(1);
   const [exposure, setExposure] = useState<IndustryExposure | null>(null);
@@ -192,6 +195,47 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
 
   const priceChartOption = useMemo(() => {
     if (!prices) return null;
+    const dates = prices.points.map((p) => p.date);
+
+    if (priceChartType === "candlestick") {
+      return {
+        grid: { left: 60, right: 20, top: 30, bottom: 40 },
+        tooltip: {
+          trigger: "axis",
+          formatter: (params: { axisValue: string; data: number[] }[]) => {
+            const p = params[0];
+            const [open, close, low, high] = p.data;
+            return `${p.axisValue}<br/>開：${formatNumber(open, { decimals: 2 })}<br/>高：${formatNumber(high, { decimals: 2 })}<br/>低：${formatNumber(low, { decimals: 2 })}<br/>收：${formatNumber(close, { decimals: 2 })}`;
+          },
+        },
+        xAxis: {
+          type: "category",
+          data: dates,
+          axisLabel: { color: "var(--text-secondary)" },
+          splitLine: { show: false },
+        },
+        yAxis: {
+          type: "value",
+          scale: true,
+          axisLabel: { color: "var(--text-secondary)" },
+          splitLine: { lineStyle: { color: "var(--border-subtle)" } },
+        },
+        series: [
+          {
+            type: "candlestick",
+            name: "K線",
+            data: prices.points.map((p) => [p.open, p.close, p.low, p.high]),
+            itemStyle: {
+              color: "#e23b3b",
+              color0: "#18a058",
+              borderColor: "#e23b3b",
+              borderColor0: "#18a058",
+            },
+          },
+        ],
+      };
+    }
+
     return {
       grid: { left: 60, right: 20, top: 30, bottom: 40 },
       tooltip: {
@@ -203,13 +247,14 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
       },
       xAxis: {
         type: "category",
-        data: prices.points.map((p) => p.date),
+        data: dates,
         axisLabel: { color: "var(--text-secondary)" },
       },
       yAxis: {
         type: "value",
         scale: true,
         axisLabel: { color: "var(--text-secondary)" },
+        splitLine: { lineStyle: { color: "var(--border-subtle)" } },
       },
       series: [
         {
@@ -218,12 +263,13 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
           data: prices.points.map((p) => p.close),
           showSymbol: false,
           smooth: true,
-          itemStyle: { color: "var(--series-1)" },
-          lineStyle: { color: "var(--series-1)" },
+          itemStyle: { color: "var(--accent-primary)" },
+          lineStyle: { color: "var(--accent-primary)" },
+          areaStyle: { color: "var(--accent-primary)", opacity: 0.08 },
         },
       ],
     };
-  }, [prices]);
+  }, [prices, priceChartType]);
 
   const top10ChartOption = useMemo(() => {
     const sorted = [...top10].sort((a, b) => a.weight_pct - b.weight_pct);
@@ -441,7 +487,31 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
             />
           )}
           {pricesState === "ok" && priceChartOption && (
-            <ReactECharts option={priceChartOption} style={{ width: "100%", height: "320px" }} />
+            <div>
+              <div className="mb-space-2 flex justify-end gap-space-2">
+                <button
+                  onClick={() => setPriceChartType("line")}
+                  className={`rounded-sm border px-space-3 py-1 text-small ${
+                    priceChartType === "line"
+                      ? "border-accent-primary text-accent-primary"
+                      : "border-border-strong text-text-secondary hover:bg-bg-surface-raised"
+                  }`}
+                >
+                  線圖
+                </button>
+                <button
+                  onClick={() => setPriceChartType("candlestick")}
+                  className={`rounded-sm border px-space-3 py-1 text-small ${
+                    priceChartType === "candlestick"
+                      ? "border-accent-primary text-accent-primary"
+                      : "border-border-strong text-text-secondary hover:bg-bg-surface-raised"
+                  }`}
+                >
+                  K線
+                </button>
+              </div>
+              <ReactECharts option={priceChartOption} style={{ width: "100%", height: "320px" }} />
+            </div>
           )}
         </ChartCard>
       </div>

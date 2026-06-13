@@ -123,6 +123,9 @@ def client(tmp_path):
             EtfPrice(
                 etf_symbol="0050",
                 trade_date=d,
+                open=99.0 + i,
+                high=101.0 + i,
+                low=98.0 + i,
                 close=100.0 + i,
                 adjusted_close=100.0 + i,
                 source_name="TEST",
@@ -228,6 +231,9 @@ def test_get_prices(client):
     dates = [p["date"] for p in body["points"]]
     assert dates == sorted(dates)
     assert all(isinstance(p["close"], float) for p in body["points"])
+    assert all(isinstance(p["open"], float) for p in body["points"])
+    assert all(isinstance(p["high"], float) for p in body["points"])
+    assert all(isinstance(p["low"], float) for p in body["points"])
     assert body["data_start"] == dates[0]
     assert body["data_end"] == dates[-1]
 
