@@ -22,6 +22,8 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql+psycopg2://etf:etf@db:5432/etf
+      # 首次啟動載入 data/samples 範例資料（示意值，非權威市場資料）；設 false 可關閉
+      SEED_SAMPLE_DATA: "true"
     depends_on:
       db:
         condition: service_healthy
