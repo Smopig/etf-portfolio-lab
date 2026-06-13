@@ -1,17 +1,23 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import PageHeader from "@/components/layout/PageHeader";
 import Badge, { overlapRatingTone } from "@/components/common/Badge";
 import MetricCard from "@/components/common/MetricCard";
+import ChartCard from "@/components/common/ChartCard";
 import DataTable, { Column } from "@/components/tables/DataTable";
 import { EmptyState, ErrorState, LoadingSkeleton, errorToFriendlyMessage } from "@/components/common/States";
 import SourceFooter from "@/components/common/SourceFooter";
 import OverlapHeatmap from "@/components/charts/OverlapHeatmap";
-import { compareEtfs, getOverlap, listEtfs } from "@/lib/api";
-import type { EtfListItem, MultiOverlap, OverlapResponse } from "@/lib/types";
+import { compareEtfs, getEtfPrices, getOverlap, listEtfs } from "@/lib/api";
+import type { EtfListItem, EtfPriceHistory, MultiOverlap, OverlapResponse } from "@/lib/types";
 import { formatNumber, formatPercent } from "@/lib/format";
+
+const ReactECharts = dynamic(() => import("echarts-for-react"), { ssr: false });
+
+const LINE_COLORS = ["#5aa9ff", "#ff7d7d", "#7be67b", "#ffd166", "#c792ea"];
 
 type FetchState = "loading" | "ok" | "empty" | "error";
 
@@ -71,6 +77,10 @@ function CompareContent() {
   const [pairwiseState, setPairwiseState] = useState<FetchState>("loading");
   const [pairwiseErr, setPairwiseErr] = useState<{ code: string; message: string } | null>(null);
 
+  const [priceHistories, setPriceHistories] = useState<Record<string, EtfPriceHistory>>({});
+  const [pricesState, setPricesState] = useState<FetchState>("loading");
+  const [pricesErr, setPricesErr] = useState<{ code: string; message: string } | null>(null);
+
   // Load ETF list for the picker
   useEffect(() => {
     listEtfs()
@@ -128,6 +138,38 @@ function CompareContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected.join(",")]);
 
+  function loadPrices(symbols: string[]) {
+    setPricesState("loading");
+    Promise.all(
+      symbols.map((sym) =>
+        getEtfPrices(sym)
+          .then((data) => [sym, data] as const)
+          .catch(() => null)
+      )
+    )
+      .then((results) => {
+        const map: Record<string, EtfPriceHistory> = {};
+        for (const r of results) {
+          if (r && r[1].points.length > 0) map[r[0]] = r[1];
+        }
+        setPriceHistories(map);
+        setPricesState(Object.keys(map).length === 0 ? "empty" : "ok");
+      })
+      .catch((e: unknown) => {
+        setPricesErr(errorToFriendlyMessage(e));
+        setPricesState("error");
+      });
+  }
+
+  useEffect(() => {
+    if (selected.length >= 1) {
+      loadPrices(selected);
+    } else {
+      setPriceHistories({});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected.join(",")]);
+
   function addSymbol(symbol: string) {
     if (!symbol) return;
     if (selected.includes(symbol)) return;
@@ -149,6 +191,118 @@ function CompareContent() {
     { key: "management_type", label: "主動/被動" },
     { key: "asset_class", label: "資產類別" },
   ];
+
+  const priceChartOption = useMemo(() => {
+    const symbols = Object.keys(priceHistories);
+    if (symbols.length === 0) return null;
+
+    // Common start = latest first-available date across all selected symbols
+    const firstDates = symbols.map((sym) => priceHistories[sym].points[0]?.date).filter(Boolean) as string[];
+    if (firstDates.length === 0) return null;
+    const commonStart = firstDates.reduce((max, d) => (d > max ? d : max));
+
+    // Build sorted union of dates from commonStart onward
+    const dateSet = new Set<string>();
+    for (const sym of symbols) {
+      for (const p of priceHistories[sym].points) {
+        if (p.date >= commonStart && p.close != null) dateSet.add(p.date);
+      }
+    }
+    const dates = Array.from(dateSet).sort();
+    if (dates.length === 0) return null;
+
+    const AXIS_LABEL_COLOR = "#c2cad6";
+    const AXIS_LINE_COLOR = "#3a4250";
+    const SPLIT_LINE_COLOR = "#272d38";
+
+    const series = symbols.map((sym, idx) => {
+      const points = priceHistories[sym].points.filter((p) => p.close != null);
+      // Find base close at or after commonStart
+      const basePoint = points.find((p) => p.date >= commonStart);
+      const base = basePoint?.close ?? null;
+
+      // Build date -> close map for last-known-value lookups
+      const closeByDate = new Map<string, number>();
+      for (const p of points) {
+        if (p.close != null) closeByDate.set(p.date, p.close);
+      }
+      const sortedDates = points.map((p) => p.date).sort();
+
+      let lastKnown: number | null = null;
+      let di = 0;
+      const data = dates.map((d) => {
+        while (di < sortedDates.length && sortedDates[di] <= d) {
+          const c = closeByDate.get(sortedDates[di]);
+          if (c != null) lastKnown = c;
+          di++;
+        }
+        if (lastKnown == null || base == null || d < commonStart) return null;
+        return Math.round((lastKnown / base) * 10000) / 100;
+      });
+
+      return {
+        type: "line",
+        name: sym,
+        data,
+        showSymbol: false,
+        smooth: true,
+        connectNulls: true,
+        lineStyle: { color: LINE_COLORS[idx % LINE_COLORS.length], width: 2 },
+        itemStyle: { color: LINE_COLORS[idx % LINE_COLORS.length] },
+      };
+    });
+
+    return {
+      backgroundColor: "transparent",
+      grid: { left: 60, right: 20, top: 50, bottom: 60 },
+      legend: {
+        data: symbols,
+        top: 4,
+        textStyle: { color: AXIS_LABEL_COLOR },
+      },
+      tooltip: {
+        trigger: "axis",
+        valueFormatter: (value: number | string | null) => {
+          if (value == null) return "—";
+          const num = Number(value);
+          return `${num} (${num >= 100 ? "+" : ""}${(num - 100).toFixed(2)}%)`;
+        },
+      },
+      xAxis: {
+        type: "category",
+        data: dates,
+        axisLabel: { color: AXIS_LABEL_COLOR },
+        axisLine: { lineStyle: { color: AXIS_LINE_COLOR } },
+        axisTick: { lineStyle: { color: AXIS_LINE_COLOR } },
+        splitLine: { show: false },
+      },
+      yAxis: {
+        type: "value",
+        name: "標準化價格 (100 基準)",
+        nameTextStyle: { color: AXIS_LABEL_COLOR },
+        scale: true,
+        axisLabel: { color: AXIS_LABEL_COLOR },
+        axisLine: { lineStyle: { color: AXIS_LINE_COLOR } },
+        axisTick: { lineStyle: { color: AXIS_LINE_COLOR } },
+        splitLine: { lineStyle: { color: SPLIT_LINE_COLOR } },
+      },
+      dataZoom: [
+        { type: "inside", zoomOnMouseWheel: true, moveOnMouseMove: true, throttle: 50 },
+        {
+          type: "slider",
+          height: 18,
+          bottom: 4,
+          borderColor: AXIS_LINE_COLOR,
+          backgroundColor: "#1c2129",
+          fillerColor: "rgba(90, 169, 255, 0.2)",
+          handleStyle: { color: "#5aa9ff", borderColor: "#5aa9ff" },
+          moveHandleStyle: { color: "#5aa9ff" },
+          textStyle: { color: AXIS_LABEL_COLOR },
+        },
+      ],
+      series,
+    };
+  }, [priceHistories]);
 
   const pairsRows = (multi?.pairs ?? []).map((p) => ({
     ...p,
@@ -314,6 +468,27 @@ function CompareContent() {
               />
             </div>
           )}
+
+          {/* 價格走勢比較 */}
+          <div className="mb-space-8">
+            <ChartCard
+              title="價格走勢比較（以共同起點 = 100 標準化）"
+              explanation="將各 ETF 的收盤價在「共同起始日」重新基準化為 100，方便比較相對漲跌幅。資料來源：Yahoo Finance。歷史價格不代表未來績效。"
+              loading={pricesState === "loading"}
+              error={pricesState === "error" ? pricesErr : null}
+              retry={() => loadPrices(selected)}
+            >
+              {pricesState === "empty" && (
+                <EmptyState
+                  title="所選 ETF 尚無價格資料"
+                  description="請先執行 scripts.fetch_all 抓取 ETF 歷史價格資料。"
+                />
+              )}
+              {pricesState === "ok" && priceChartOption && (
+                <ReactECharts option={priceChartOption} style={{ width: "100%", height: "420px" }} />
+              )}
+            </ChartCard>
+          </div>
 
           {/* AI 比較結論 */}
           <div className="mb-space-8 rounded-md border border-border-subtle bg-bg-surface p-space-4">

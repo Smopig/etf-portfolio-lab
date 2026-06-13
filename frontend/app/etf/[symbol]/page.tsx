@@ -89,6 +89,15 @@ function formatCompactVolume(value: number | null | undefined): string {
   return formatInteger(value);
 }
 
+const MA_PERIODS = [5, 10, 20, 60] as const;
+const MA_COLORS: Record<number, string> = {
+  5: "#f5a623",
+  10: "#4ec9b0",
+  20: "#b07cff",
+  60: "#ff6b9d",
+};
+const DEFAULT_MA_PERIODS: number[] = [5, 20];
+
 type FetchState = "loading" | "ok" | "empty" | "error";
 
 const HOLDINGS_COLUMNS: Column[] = [
@@ -127,6 +136,15 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
 
   // Price chart type toggle (線圖 / K線)
   const [priceChartType, setPriceChartType] = useState<"line" | "candlestick">("candlestick");
+
+  // Moving average periods toggle
+  const [maPeriods, setMaPeriods] = useState<number[]>(DEFAULT_MA_PERIODS);
+
+  function toggleMaPeriod(period: number) {
+    setMaPeriods((prev) =>
+      prev.includes(period) ? prev.filter((p) => p !== period) : [...prev, period].sort((a, b) => a - b)
+    );
+  }
 
   // Industry exposure (chart, with level toggle)
   const [level, setLevel] = useState<1 | 2>(1);
@@ -280,36 +298,22 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
       },
     ];
 
-    const ma5 = movingAverage(prices.points, 5);
-    const ma20 = movingAverage(prices.points, 20);
+    const maNames = maPeriods.map((n) => `MA${n}`);
 
-    const maSeries = [
-      {
-        type: "line",
-        name: "MA5",
-        xAxisIndex: 0,
-        yAxisIndex: 0,
-        data: ma5,
-        showSymbol: false,
-        smooth: true,
-        lineStyle: { color: "#f5a623", width: 1.5 },
-        itemStyle: { color: "#f5a623" },
-      },
-      {
-        type: "line",
-        name: "MA20",
-        xAxisIndex: 0,
-        yAxisIndex: 0,
-        data: ma20,
-        showSymbol: false,
-        smooth: true,
-        lineStyle: { color: "#b07cff", width: 1.5 },
-        itemStyle: { color: "#b07cff" },
-      },
-    ];
+    const maSeries = maPeriods.map((n) => ({
+      type: "line",
+      name: `MA${n}`,
+      xAxisIndex: 0,
+      yAxisIndex: 0,
+      data: movingAverage(prices.points, n),
+      showSymbol: false,
+      smooth: true,
+      lineStyle: { color: MA_COLORS[n], width: 1.5 },
+      itemStyle: { color: MA_COLORS[n] },
+    }));
 
     const sharedLegend = {
-      data: ["MA5", "MA20"],
+      data: maNames,
       top: 4,
       right: 20,
       textStyle: { color: "#c2cad6" },
@@ -354,19 +358,17 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
           formatter: (params: { axisValue: string; seriesName: string; data: number[] | { value: number; itemStyle?: unknown } | number }[]) => {
             const pricePoint = params.find((p) => p.seriesName === "K線");
             const volumePoint = params.find((p) => p.seriesName === "成交量");
-            const ma5Point = params.find((p) => p.seriesName === "MA5");
-            const ma20Point = params.find((p) => p.seriesName === "MA20");
             const axisValue = params[0]?.axisValue ?? "";
             let lines = `${axisValue}`;
             if (pricePoint && Array.isArray(pricePoint.data)) {
               const [open, close, low, high] = pricePoint.data;
               lines += `<br/>開：${formatNumber(open, { decimals: 2 })}<br/>高：${formatNumber(high, { decimals: 2 })}<br/>低：${formatNumber(low, { decimals: 2 })}<br/>收：${formatNumber(close, { decimals: 2 })}`;
             }
-            if (ma5Point && typeof ma5Point.data === "number") {
-              lines += `<br/>MA5：${formatNumber(ma5Point.data, { decimals: 2 })}`;
-            }
-            if (ma20Point && typeof ma20Point.data === "number") {
-              lines += `<br/>MA20：${formatNumber(ma20Point.data, { decimals: 2 })}`;
+            for (const n of maPeriods) {
+              const maPoint = params.find((p) => p.seriesName === `MA${n}`);
+              if (maPoint && typeof maPoint.data === "number") {
+                lines += `<br/>MA${n}：${formatNumber(maPoint.data, { decimals: 2 })}`;
+              }
             }
             if (volumePoint) {
               const vol = Array.isArray(volumePoint.data) || typeof volumePoint.data === "number" ? 0 : volumePoint.data.value;
@@ -413,18 +415,16 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
         formatter: (params: { axisValue: string; seriesName: string; value: number }[]) => {
           const pricePoint = params.find((p) => p.seriesName === "收盤價");
           const volumePoint = params.find((p) => p.seriesName === "成交量");
-          const ma5Point = params.find((p) => p.seriesName === "MA5");
-          const ma20Point = params.find((p) => p.seriesName === "MA20");
           const axisValue = params[0]?.axisValue ?? "";
           let lines = `${axisValue}`;
           if (pricePoint) {
             lines += `<br/>收盤價：${formatNumber(pricePoint.value, { decimals: 2 })}`;
           }
-          if (ma5Point && ma5Point.value !== null && ma5Point.value !== undefined) {
-            lines += `<br/>MA5：${formatNumber(ma5Point.value, { decimals: 2 })}`;
-          }
-          if (ma20Point && ma20Point.value !== null && ma20Point.value !== undefined) {
-            lines += `<br/>MA20：${formatNumber(ma20Point.value, { decimals: 2 })}`;
+          for (const n of maPeriods) {
+            const maPoint = params.find((p) => p.seriesName === `MA${n}`);
+            if (maPoint && maPoint.value !== null && maPoint.value !== undefined) {
+              lines += `<br/>MA${n}：${formatNumber(maPoint.value, { decimals: 2 })}`;
+            }
           }
           if (volumePoint) {
             lines += `<br/>成交量：${formatCompactVolume(volumePoint.value)}`;
@@ -458,7 +458,7 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
         },
       ],
     };
-  }, [prices, priceChartType]);
+  }, [prices, priceChartType, maPeriods]);
 
   const priceHeader = useMemo(() => {
     if (!prices || prices.points.length === 0) return null;
@@ -722,7 +722,22 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
           )}
           {pricesState === "ok" && priceChartOption && (
             <div>
-              <div className="mb-space-2 flex justify-end gap-space-2">
+              <div className="mb-space-2 flex flex-wrap items-center justify-end gap-space-2">
+                <span className="text-small text-text-muted">MA：</span>
+                {MA_PERIODS.map((n) => (
+                  <button
+                    key={n}
+                    onClick={() => toggleMaPeriod(n)}
+                    className={`rounded-sm border px-space-3 py-1 text-small ${
+                      maPeriods.includes(n)
+                        ? "border-accent-primary text-accent-primary"
+                        : "border-border-strong text-text-secondary hover:bg-bg-surface-raised"
+                    }`}
+                  >
+                    MA{n}
+                  </button>
+                ))}
+                <span className="mx-space-2 h-4 w-px bg-border-strong" />
                 <button
                   onClick={() => setPriceChartType("line")}
                   className={`rounded-sm border px-space-3 py-1 text-small ${
