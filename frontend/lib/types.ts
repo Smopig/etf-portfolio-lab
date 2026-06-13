@@ -344,6 +344,7 @@ export interface BacktestRequestPayload {
   rebalance_frequency?: "none" | "monthly" | "quarterly" | "annually" | string;
   transaction_cost_rate?: number;
   risk_free_rate?: number;
+  benchmark_symbol?: string | null;
   name?: string | null;
 }
 
@@ -369,7 +370,20 @@ export interface BacktestResult {
   annual_returns: Record<string, number>;
   portfolio_value_series: BacktestSeriesPoint[];
   drawdown_series: DrawdownSeriesPoint[];
+  total_return?: number;
+  benchmark?: BacktestBenchmark | null;
   disclaimer: string;
+}
+
+export interface BacktestBenchmark {
+  symbol: string;
+  equity_curve: BacktestSeriesPoint[];
+  metrics: {
+    cagr: number;
+    total_return: number;
+    max_drawdown: number;
+    final_value: number;
+  };
 }
 
 // ---------------------------------------------------------------------------

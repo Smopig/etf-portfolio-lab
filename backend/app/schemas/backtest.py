@@ -22,6 +22,8 @@ class BacktestRequest(BaseModel):
     transaction_cost_rate: float = 0.0
     risk_free_rate: float = 0.0
 
+    benchmark_symbol: str | None = None
+
     name: str | None = None
 
     @model_validator(mode="after")

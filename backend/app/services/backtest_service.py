@@ -492,12 +492,72 @@ def load_dividends_from_db(
     return result
 
 
+def _compute_benchmark(
+    session,
+    benchmark_symbol: str,
+    config: BacktestConfig,
+) -> dict | None:
+    """Compute a buy-and-hold benchmark equity curve over the same window,
+    initial capital, and engine as the portfolio backtest.
+
+    Returns ``None`` if the benchmark has no price data in the requested
+    date range (does not raise).
+    """
+    bench_prices = load_prices_from_db(
+        session, [benchmark_symbol], config.start_date, config.end_date
+    )
+    series = bench_prices.get(benchmark_symbol)
+    if series is None or series.empty:
+        return None
+
+    bench_config = BacktestConfig(
+        start_date=config.start_date,
+        end_date=config.end_date,
+        weights={benchmark_symbol: 1.0},
+        initial_amount=config.initial_amount,
+        monthly_contribution=0.0,
+        dividend_reinvest=config.dividend_reinvest,
+        rebalance_frequency="none",
+        transaction_cost_rate=0.0,
+        risk_free_rate=config.risk_free_rate,
+    )
+    bench_dividends = load_dividends_from_db(
+        session, [benchmark_symbol], config.start_date, config.end_date
+    )
+
+    try:
+        bench_result = run_backtest(
+            {benchmark_symbol: series}, bench_dividends, bench_config
+        )
+    except ValueError:
+        return None
+
+    return {
+        "symbol": benchmark_symbol,
+        "equity_curve": [
+            {"date": d.isoformat(), "value": v}
+            for d, v in bench_result.portfolio_value_series
+        ],
+        "metrics": {
+            "cagr": bench_result.cagr,
+            "total_return": (
+                (bench_result.final_value / bench_result.total_contribution) - 1.0
+                if bench_result.total_contribution
+                else 0.0
+            ),
+            "max_drawdown": bench_result.max_drawdown,
+            "final_value": bench_result.final_value,
+        },
+    }
+
+
 def run_backtest_from_db(
     session,
     config: BacktestConfig,
     portfolio_id: int | None = None,
     name: str | None = None,
     persist: bool = False,
+    benchmark_symbol: str | None = None,
 ) -> dict:
     """Load data from DB, run the pure engine, optionally persist a
     ``BacktestRun`` row, and return the result as a dict.
@@ -514,6 +574,16 @@ def run_backtest_from_db(
 
     result = run_backtest(prices, dividends, config)
     result_dict = result.to_dict()
+    result_dict["total_return"] = (
+        (result.final_value / result.total_contribution) - 1.0
+        if result.total_contribution
+        else 0.0
+    )
+
+    if benchmark_symbol:
+        result_dict["benchmark"] = _compute_benchmark(session, benchmark_symbol, config)
+    else:
+        result_dict["benchmark"] = None
 
     if persist:
         from app.models import BacktestRun

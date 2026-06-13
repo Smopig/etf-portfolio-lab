@@ -53,6 +53,7 @@ def run_backtest_endpoint(
             portfolio_id=payload.portfolio_id,
             name=payload.name,
             persist=persist,
+            benchmark_symbol=payload.benchmark_symbol,
         )
     except ValueError as exc:
         raise validation_error(str(exc)) from exc
