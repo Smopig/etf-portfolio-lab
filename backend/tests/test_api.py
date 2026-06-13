@@ -238,6 +238,50 @@ def test_get_prices(client):
     assert body["data_end"] == dates[-1]
 
 
+def test_get_price_range(client):
+    response = client.get("/api/etfs/price-range", params={"symbols": "0050,006208,0099"})
+    assert response.status_code == 200
+    body = response.json()["data"]
+    # both 0050 and 006208 have prices for 2026-01-01..2026-01-10
+    assert body["per_symbol"]["0050"]["start"] == "2026-01-01"
+    assert body["per_symbol"]["0050"]["end"] == "2026-01-10"
+    assert body["per_symbol"]["006208"]["start"] == "2026-01-01"
+    assert body["per_symbol"]["006208"]["end"] == "2026-01-10"
+    # 0099 has no price rows
+    assert body["per_symbol"]["0099"]["start"] is None
+    assert body["per_symbol"]["0099"]["end"] is None
+    assert body["common_start"] == "2026-01-01"
+    assert body["common_end"] == "2026-01-10"
+
+
+def test_get_price_range_overlap(client):
+    # Insert a symbol with a shifted range to verify common window narrowing
+    from app.models import EtfPrice as EtfPriceModel
+
+    session = next(app.dependency_overrides[get_db]())
+    for i in range(5):
+        d = dt.date(2026, 1, 5) + dt.timedelta(days=i)
+        session.add(
+            EtfPriceModel(
+                etf_symbol="0099",
+                trade_date=d,
+                close=10.0 + i,
+                adjusted_close=10.0 + i,
+                source_name="TEST",
+            )
+        )
+    session.commit()
+    session.close()
+
+    response = client.get("/api/etfs/price-range", params={"symbols": "0050,006208,0099"})
+    assert response.status_code == 200
+    body = response.json()["data"]
+    # 0050/006208: 2026-01-01..2026-01-10 ; 0099: 2026-01-05..2026-01-09
+    # common_start = max(starts) = 2026-01-05, common_end = min(ends) = 2026-01-09
+    assert body["common_start"] == "2026-01-05"
+    assert body["common_end"] == "2026-01-09"
+
+
 def test_get_prices_unknown_symbol(client):
     response = client.get("/api/etfs/UNKNOWN/prices")
     assert response.status_code == 200

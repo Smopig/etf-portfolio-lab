@@ -69,6 +69,60 @@ def get_price_history(
     }
 
 
+def get_price_ranges(session: Session, symbols: list[str]) -> dict:
+    """Return per-symbol min/max trade_date and the common overlapping window.
+
+    {
+      "per_symbol": {sym: {"start": iso|null, "end": iso|null}},
+      "common_start": iso|null,
+      "common_end": iso|null,
+    }
+
+    common_start = max of per-symbol starts (latest start), common_end = min
+    of per-symbol ends (earliest end), considering only symbols that have
+    data. If no symbol has data, both are null.
+    """
+    rows = (
+        session.query(
+            EtfPrice.etf_symbol,
+            func.min(EtfPrice.trade_date),
+            func.max(EtfPrice.trade_date),
+        )
+        .filter(EtfPrice.etf_symbol.in_(symbols))
+        .group_by(EtfPrice.etf_symbol)
+        .all()
+    )
+
+    ranges_by_symbol = {sym: (start, end) for sym, start, end in rows}
+
+    per_symbol: dict[str, dict] = {}
+    starts: list[dt.date] = []
+    ends: list[dt.date] = []
+    for sym in symbols:
+        rng = ranges_by_symbol.get(sym)
+        if rng is None:
+            per_symbol[sym] = {"start": None, "end": None}
+            continue
+        start, end = rng
+        per_symbol[sym] = {
+            "start": start.isoformat() if start is not None else None,
+            "end": end.isoformat() if end is not None else None,
+        }
+        if start is not None:
+            starts.append(start)
+        if end is not None:
+            ends.append(end)
+
+    common_start = max(starts).isoformat() if starts else None
+    common_end = min(ends).isoformat() if ends else None
+
+    return {
+        "per_symbol": per_symbol,
+        "common_start": common_start,
+        "common_end": common_end,
+    }
+
+
 def get_latest_prices(session: Session, symbols: list[str] | None = None) -> dict[str, dict]:
     """Return the latest close and previous close per ETF symbol in one query.
 

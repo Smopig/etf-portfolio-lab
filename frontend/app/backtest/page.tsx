@@ -10,7 +10,7 @@ import SourceFooter from "@/components/common/SourceFooter";
 import Badge, { BadgeTone } from "@/components/common/Badge";
 import DataTable, { Column } from "@/components/tables/DataTable";
 import { EmptyState, ErrorState, LoadingSkeleton, errorToFriendlyMessage } from "@/components/common/States";
-import { runBacktest, listPortfolios } from "@/lib/api";
+import { runBacktest, listPortfolios, getEtfPriceRange } from "@/lib/api";
 import type { BacktestRequestPayload, BacktestResult, Portfolio } from "@/lib/types";
 import { formatCurrencyTWD, formatNumber, formatPercent } from "@/lib/format";
 
@@ -67,6 +67,7 @@ function BacktestContent() {
   const [state, setState] = useState<FetchState>("idle");
   const [error, setError] = useState<{ code: string; message: string } | null>(null);
   const [result, setResult] = useState<BacktestResult | null>(null);
+  const [rangeHint, setRangeHint] = useState<string | null>(null);
 
   useEffect(() => {
     listPortfolios()
@@ -75,6 +76,39 @@ function BacktestContent() {
     const pid = searchParams.get("portfolio_id");
     if (pid) setPortfolioId(pid);
   }, [searchParams]);
+
+  // Determine the active set of symbols (from selected portfolio or manual input).
+  const activeSymbols = portfolioId
+    ? portfolios.find((p) => String(p.id) === portfolioId)?.items.map((i) => i.etf_symbol) ?? []
+    : symbolsText.split(",").map((s) => s.trim()).filter(Boolean);
+
+  // Prefill start/end dates with the common available price-data range whenever
+  // the selected symbols change, so users don't pick a range with no data.
+  useEffect(() => {
+    if (activeSymbols.length === 0) {
+      setRangeHint(null);
+      return;
+    }
+    let cancelled = false;
+    getEtfPriceRange(activeSymbols)
+      .then((range) => {
+        if (cancelled) return;
+        if (range.common_start && range.common_end) {
+          setStartDate(range.common_start);
+          setEndDate(range.common_end);
+          setRangeHint(null);
+        } else {
+          setRangeHint("所選 ETF 無共同的歷史價格資料範圍，請手動確認日期。");
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setRangeHint(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(activeSymbols)]);
 
   function buildPayload(): BacktestRequestPayload | null {
     const payload: BacktestRequestPayload = {
@@ -252,6 +286,7 @@ function BacktestContent() {
             onChange={(e) => setEndDate(e.target.value)}
             className="w-full rounded-sm border border-border-subtle bg-bg-inset px-space-2 py-1 text-body text-text-primary focus:border-accent-primary focus:outline-none"
           />
+          {rangeHint && <p className="mt-space-1 text-small text-text-secondary">{rangeHint}</p>}
         </div>
         <div>
           <label className="mb-space-1 block text-small text-text-secondary">初始投入金額</label>

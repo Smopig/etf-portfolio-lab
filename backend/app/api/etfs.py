@@ -23,7 +23,7 @@ from app.services.overlap_service import (
     get_multi_overlap,
     get_pairwise_overlap,
 )
-from app.services.price_service import get_latest_prices, get_price_history
+from app.services.price_service import get_latest_prices, get_price_history, get_price_ranges
 
 router = APIRouter(prefix="/etfs", tags=["etfs"])
 
@@ -100,6 +100,12 @@ def overlap_etfs(symbols: str = Query(...), db: Session = Depends(get_db)) -> di
     pairwise = get_pairwise_overlap(db, syms[0], syms[1])
     industry_similarity = get_industry_similarity(db, syms[0], syms[1])
     return ok({"overlap": pairwise, "industry_similarity": industry_similarity})
+
+
+@router.get("/price-range")
+def get_etf_price_range(symbols: str = Query(...), db: Session = Depends(get_db)) -> dict:
+    syms = _split_symbols(symbols)
+    return ok(get_price_ranges(db, syms))
 
 
 @router.get("/{symbol}")

@@ -137,6 +137,12 @@ export interface EtfPricePoint {
   volume: number | null;
 }
 
+export interface EtfPriceRange {
+  per_symbol: Record<string, { start: string | null; end: string | null }>;
+  common_start: string | null;
+  common_end: string | null;
+}
+
 export interface EtfPriceHistory {
   symbol: string;
   currency: string;

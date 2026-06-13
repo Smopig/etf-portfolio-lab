@@ -60,6 +60,28 @@ function managementTypeBadge(value: string | null): { label: string; tone: Badge
   return { label: value ?? "—", tone: "neutral" };
 }
 
+function movingAverage(points: { close: number | null }[], n: number): (number | null)[] {
+  const result: (number | null)[] = [];
+  for (let i = 0; i < points.length; i++) {
+    if (i < n - 1) {
+      result.push(null);
+      continue;
+    }
+    let sum = 0;
+    let valid = true;
+    for (let j = i - n + 1; j <= i; j++) {
+      const c = points[j].close;
+      if (c === null || c === undefined) {
+        valid = false;
+        break;
+      }
+      sum += c;
+    }
+    result.push(valid ? sum / n : null);
+  }
+  return result;
+}
+
 function formatCompactVolume(value: number | null | undefined): string {
   if (value === null || value === undefined || Number.isNaN(value)) return "—";
   if (value >= 1e8) return `${formatNumber(value / 1e8, { decimals: 2 })}億`;
@@ -258,6 +280,43 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
       },
     ];
 
+    const ma5 = movingAverage(prices.points, 5);
+    const ma20 = movingAverage(prices.points, 20);
+
+    const maSeries = [
+      {
+        type: "line",
+        name: "MA5",
+        xAxisIndex: 0,
+        yAxisIndex: 0,
+        data: ma5,
+        showSymbol: false,
+        smooth: true,
+        lineStyle: { color: "#f5a623", width: 1.5 },
+        itemStyle: { color: "#f5a623" },
+      },
+      {
+        type: "line",
+        name: "MA20",
+        xAxisIndex: 0,
+        yAxisIndex: 0,
+        data: ma20,
+        showSymbol: false,
+        smooth: true,
+        lineStyle: { color: "#b07cff", width: 1.5 },
+        itemStyle: { color: "#b07cff" },
+      },
+    ];
+
+    const sharedLegend = {
+      data: ["MA5", "MA20"],
+      top: 4,
+      right: 20,
+      textStyle: { color: "#c2cad6" },
+      itemWidth: 16,
+      itemHeight: 8,
+    };
+
     const axisPointerLink = { link: [{ xAxisIndex: "all" }] };
 
     const sharedDataZoom = [
@@ -287,21 +346,30 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
       }));
       return {
         grid: sharedGrid,
+        legend: sharedLegend,
         axisPointer: axisPointerLink,
         dataZoom: sharedDataZoom,
         tooltip: {
           trigger: "axis",
-          formatter: (params: { axisValue: string; seriesName: string; data: number[] | { value: number; itemStyle?: unknown } }[]) => {
+          formatter: (params: { axisValue: string; seriesName: string; data: number[] | { value: number; itemStyle?: unknown } | number }[]) => {
             const pricePoint = params.find((p) => p.seriesName === "K線");
             const volumePoint = params.find((p) => p.seriesName === "成交量");
+            const ma5Point = params.find((p) => p.seriesName === "MA5");
+            const ma20Point = params.find((p) => p.seriesName === "MA20");
             const axisValue = params[0]?.axisValue ?? "";
             let lines = `${axisValue}`;
             if (pricePoint && Array.isArray(pricePoint.data)) {
               const [open, close, low, high] = pricePoint.data;
               lines += `<br/>開：${formatNumber(open, { decimals: 2 })}<br/>高：${formatNumber(high, { decimals: 2 })}<br/>低：${formatNumber(low, { decimals: 2 })}<br/>收：${formatNumber(close, { decimals: 2 })}`;
             }
+            if (ma5Point && typeof ma5Point.data === "number") {
+              lines += `<br/>MA5：${formatNumber(ma5Point.data, { decimals: 2 })}`;
+            }
+            if (ma20Point && typeof ma20Point.data === "number") {
+              lines += `<br/>MA20：${formatNumber(ma20Point.data, { decimals: 2 })}`;
+            }
             if (volumePoint) {
-              const vol = Array.isArray(volumePoint.data) ? 0 : volumePoint.data.value;
+              const vol = Array.isArray(volumePoint.data) || typeof volumePoint.data === "number" ? 0 : volumePoint.data.value;
               lines += `<br/>成交量：${formatCompactVolume(vol)}`;
             }
             return lines;
@@ -323,6 +391,7 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
               borderColor0: "#18a058",
             },
           },
+          ...maSeries,
           {
             type: "bar",
             name: "成交量",
@@ -336,6 +405,7 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
 
     return {
       grid: sharedGrid,
+      legend: sharedLegend,
       axisPointer: axisPointerLink,
       dataZoom: sharedDataZoom,
       tooltip: {
@@ -343,10 +413,18 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
         formatter: (params: { axisValue: string; seriesName: string; value: number }[]) => {
           const pricePoint = params.find((p) => p.seriesName === "收盤價");
           const volumePoint = params.find((p) => p.seriesName === "成交量");
+          const ma5Point = params.find((p) => p.seriesName === "MA5");
+          const ma20Point = params.find((p) => p.seriesName === "MA20");
           const axisValue = params[0]?.axisValue ?? "";
           let lines = `${axisValue}`;
           if (pricePoint) {
             lines += `<br/>收盤價：${formatNumber(pricePoint.value, { decimals: 2 })}`;
+          }
+          if (ma5Point && ma5Point.value !== null && ma5Point.value !== undefined) {
+            lines += `<br/>MA5：${formatNumber(ma5Point.value, { decimals: 2 })}`;
+          }
+          if (ma20Point && ma20Point.value !== null && ma20Point.value !== undefined) {
+            lines += `<br/>MA20：${formatNumber(ma20Point.value, { decimals: 2 })}`;
           }
           if (volumePoint) {
             lines += `<br/>成交量：${formatCompactVolume(volumePoint.value)}`;
@@ -369,6 +447,7 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
           lineStyle: { color: "#5aa9ff", width: 2 },
           areaStyle: { color: "#5aa9ff", opacity: 0.08 },
         },
+        ...maSeries,
         {
           type: "bar",
           name: "成交量",
@@ -380,6 +459,22 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
       ],
     };
   }, [prices, priceChartType]);
+
+  const priceHeader = useMemo(() => {
+    if (!prices || prices.points.length === 0) return null;
+    const withClose = prices.points.filter((p) => p.close !== null && p.close !== undefined);
+    if (withClose.length === 0) return null;
+    const latest = withClose[withClose.length - 1];
+    const prev = withClose.length > 1 ? withClose[withClose.length - 2] : null;
+    const latestClose = latest.close as number;
+    if (!prev) {
+      return { latestClose, change: null, changePct: null, date: latest.date };
+    }
+    const prevClose = prev.close as number;
+    const change = latestClose - prevClose;
+    const changePct = prevClose !== 0 ? (change / prevClose) * 100 : null;
+    return { latestClose, change, changePct, date: latest.date };
+  }, [prices]);
 
   const top10ChartOption = useMemo(() => {
     const sorted = [...top10].sort((a, b) => a.weight_pct - b.weight_pct);
@@ -492,6 +587,35 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
         {card.asset_class && <Badge label={card.asset_class} tone="neutral" />}
         {card.investment_style && <Badge label={card.investment_style} tone="neutral" />}
       </div>
+
+      {/* 現價 + 漲跌 */}
+      {priceHeader && (
+        <div className="mb-space-6 flex items-baseline gap-space-3">
+          <span className="text-h1 text-text-primary">
+            {formatNumber(priceHeader.latestClose, { decimals: 2 })}
+          </span>
+          <span className="text-body text-text-muted">TWD</span>
+          {priceHeader.change !== null && priceHeader.changePct !== null && (
+            <span
+              className="text-body font-medium"
+              style={{
+                color:
+                  priceHeader.change > 0
+                    ? "#e23b3b"
+                    : priceHeader.change < 0
+                      ? "#18a058"
+                      : "var(--text-muted)",
+              }}
+            >
+              {priceHeader.change > 0 ? "+" : ""}
+              {formatNumber(priceHeader.change, { decimals: 2 })} (
+              {priceHeader.change > 0 ? "+" : ""}
+              {formatNumber(priceHeader.changePct, { decimals: 2 })}%)
+            </span>
+          )}
+          <span className="text-small text-text-muted">收盤 {priceHeader.date}</span>
+        </div>
+      )}
 
       {/* 策略卡 */}
       <div className="mb-space-8 rounded-md border border-border-subtle bg-bg-surface p-space-4">

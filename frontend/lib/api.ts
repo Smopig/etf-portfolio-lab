@@ -8,6 +8,7 @@ import type {
   DataSource,
   EtfCard,
   EtfPriceHistory,
+  EtfPriceRange,
   FetchLog,
   EtfListItem,
   GoalSeekRequestPayload,
@@ -194,6 +195,10 @@ export async function getEtfPrices(
       limit: params?.limit,
     })}`
   );
+}
+
+export async function getEtfPriceRange(symbols: string[]): Promise<EtfPriceRange> {
+  return apiFetch<EtfPriceRange>(`/api/etfs/price-range${qs({ symbols: symbols.join(",") })}`);
 }
 
 export async function compareEtfs(symbols: string[]): Promise<MultiOverlap> {
