@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
 import PageHeader from "@/components/layout/PageHeader";
 import MetricCard from "@/components/common/MetricCard";
 import ChartCard from "@/components/common/ChartCard";
@@ -39,6 +40,7 @@ const SOLVE_FOR_OPTIONS: { value: GoalSeekRequestPayload["solve_for"]; label: st
 ];
 
 export default function ProjectionPage() {
+  const router = useRouter();
   // --- 共用表單欄位 ---
   const [initialAmount, setInitialAmount] = useState("100000");
   const [monthlyContribution, setMonthlyContribution] = useState("5000");
@@ -281,6 +283,22 @@ export default function ProjectionPage() {
         )}
         {singleState === "ok" && singleResult && (
           <>
+            <div className="mb-space-4 flex justify-end">
+              <button
+                onClick={() => {
+                  try {
+                    sessionStorage.setItem("ai:lastProjection", JSON.stringify(singleResult));
+                  } catch {
+                    // ignore storage errors
+                  }
+                  router.push("/ai?context=projection");
+                }}
+                className="rounded-sm border border-border-strong px-space-4 py-2 text-body text-text-primary transition-colors hover:bg-bg-surface-raised"
+              >
+                以 AI 解釋此結果
+              </button>
+            </div>
+
             <div className="mb-space-4 grid grid-cols-1 gap-space-4 sm:grid-cols-2 lg:grid-cols-4">
               <MetricCard
                 label="最終資產"

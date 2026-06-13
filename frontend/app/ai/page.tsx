@@ -1,124 +1,155 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import PageHeader from "@/components/layout/PageHeader";
-import Badge from "@/components/common/Badge";
-import { EmptyState } from "@/components/common/States";
-import SourceFooter from "@/components/common/SourceFooter";
-import { listEtfs, listPortfolios } from "@/lib/api";
-import type { EtfListItem, Portfolio } from "@/lib/types";
+import { LoadingSkeleton, errorToFriendlyMessage } from "@/components/common/States";
+import DisclaimerBanner from "@/components/ai/DisclaimerBanner";
+import ContextPicker, { ContextTab } from "@/components/ai/ContextPicker";
+import QuestionInput from "@/components/ai/QuestionInput";
+import AnalysisResultPanel from "@/components/ai/AnalysisResultPanel";
+import { analyzeEtf, analyzePortfolio, explainBacktest, explainProjection, listEtfs, listPortfolios } from "@/lib/api";
+import type { AIAnalysisResponse, BacktestResult, EtfListItem, Portfolio, ProjectionResult } from "@/lib/types";
 
-export default function AiAssistantPage() {
+type FetchState = "idle" | "loading" | "ok" | "error";
+
+function AiAssistantContent() {
+  const searchParams = useSearchParams();
+
   const [etfs, setEtfs] = useState<EtfListItem[]>([]);
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
-  const [contextType, setContextType] = useState<"etf" | "portfolio">("etf");
-  const [contextValue, setContextValue] = useState("");
+
+  const [tab, setTab] = useState<ContextTab>("etf");
+  const [etfSymbol, setEtfSymbol] = useState("");
+  const [portfolioId, setPortfolioId] = useState("");
+  const [portfolioError, setPortfolioError] = useState<string | null>(null);
+  const [question, setQuestion] = useState("");
+
+  const [backtestResult, setBacktestResult] = useState<BacktestResult | null>(null);
+  const [projectionResult, setProjectionResult] = useState<ProjectionResult | null>(null);
+
+  const [state, setState] = useState<FetchState>("idle");
+  const [error, setError] = useState<{ code: string; message: string } | null>(null);
+  const [result, setResult] = useState<AIAnalysisResponse | null>(null);
 
   useEffect(() => {
     listEtfs().then(setEtfs).catch(() => setEtfs([]));
     listPortfolios().then(setPortfolios).catch(() => setPortfolios([]));
-  }, []);
+
+    try {
+      const bt = sessionStorage.getItem("ai:lastBacktest");
+      if (bt) setBacktestResult(JSON.parse(bt));
+      const pj = sessionStorage.getItem("ai:lastProjection");
+      if (pj) setProjectionResult(JSON.parse(pj));
+    } catch {
+      // ignore malformed sessionStorage content
+    }
+
+    const ctx = searchParams.get("context");
+    if (ctx === "backtest" || ctx === "projection" || ctx === "portfolio" || ctx === "etf") {
+      setTab(ctx);
+    }
+  }, [searchParams]);
+
+  function handleSubmit() {
+    if (tab === "portfolio" && !portfolioId) {
+      setPortfolioError("請選擇一個投資組合");
+      return;
+    }
+    setPortfolioError(null);
+
+    let request: Promise<AIAnalysisResponse> | null = null;
+    if (tab === "etf") {
+      if (!etfSymbol) return;
+      request = analyzeEtf(etfSymbol, question || undefined);
+    } else if (tab === "portfolio") {
+      request = analyzePortfolio({ portfolioId: Number(portfolioId) }, question || undefined);
+    } else if (tab === "backtest") {
+      if (!backtestResult) return;
+      request = explainBacktest(backtestResult, question || undefined);
+    } else if (tab === "projection") {
+      if (!projectionResult) return;
+      request = explainProjection(projectionResult, question || undefined);
+    }
+    if (!request) return;
+
+    setState("loading");
+    setError(null);
+    request
+      .then((data) => {
+        setResult(data);
+        setState("ok");
+      })
+      .catch((e: unknown) => {
+        setError(errorToFriendlyMessage(e));
+        setState("error");
+      });
+  }
+
+  const canSubmit =
+    state !== "loading" &&
+    ((tab === "etf" && !!etfSymbol) ||
+      (tab === "portfolio" && !!portfolioId) ||
+      (tab === "backtest" && !!backtestResult) ||
+      (tab === "projection" && !!projectionResult));
 
   return (
     <div>
       <PageHeader
         title="AI 助手"
-        subtitle="基於系統資料解釋分析結果，協助理解 ETF 與投資組合的研究資訊。"
-        actions={<Badge label="即將推出" tone="neutral" />}
+        subtitle="針對 ETF、投資組合、回測或推算結果，取得基於系統資料的研究說明（非投資建議）"
       />
 
-      {/* 說明區 */}
-      <div className="mb-space-6 rounded-md border border-border-subtle bg-bg-surface p-space-4 text-body text-text-secondary">
-        <p className="mb-space-2">
-          AI 助手功能規劃於 Phase 13 開放。開放後，AI 將僅根據本系統內的資料（成分股、產業曝險、集中度、回測與推算結果等）回答問題，
-          每則回覆都會附上「資料來源」與「資料日期」。
-        </p>
-        <p className="mb-space-2">
-          為避免誤導，AI 助手<strong className="text-text-primary">不會提供買賣建議或進出場時點建議</strong>，
-          回測或模擬相關的回答也會附帶「不代表未來績效」的提醒。AI 助手不會憑空猜測 ETF 成分股或產業占比等未在系統中的資料。
-        </p>
-        <p>目前後端 <code className="rounded-sm bg-bg-inset px-1">/api/ai/analyze-etf</code> 與 <code className="rounded-sm bg-bg-inset px-1">/api/ai/analyze-portfolio</code> 端點皆回傳 501（尚未實作）。</p>
-      </div>
+      <DisclaimerBanner />
 
-      {/* AIChatPanel (disabled) */}
-      <div className="mb-space-8 rounded-md border border-border-subtle bg-bg-surface p-space-4">
-        <h2 className="mb-space-4 text-h2 text-text-primary">AI 對話面板（預覽）</h2>
-
-        <div className="mb-space-4 grid grid-cols-1 gap-space-4 sm:grid-cols-2">
-          <div>
-            <label className="mb-space-1 block text-small text-text-secondary">分析對象類型</label>
-            <select
-              value={contextType}
-              onChange={(e) => {
-                setContextType(e.target.value as "etf" | "portfolio");
-                setContextValue("");
-              }}
-              className="w-full rounded-sm border border-border-subtle bg-bg-inset px-space-2 py-1 text-body text-text-primary focus:border-accent-primary focus:outline-none"
-            >
-              <option value="etf">ETF</option>
-              <option value="portfolio">投資組合</option>
-            </select>
-          </div>
-          <div>
-            <label className="mb-space-1 block text-small text-text-secondary">
-              {contextType === "etf" ? "選擇 ETF" : "選擇投資組合"}
-            </label>
-            <select
-              value={contextValue}
-              onChange={(e) => setContextValue(e.target.value)}
-              className="w-full rounded-sm border border-border-subtle bg-bg-inset px-space-2 py-1 text-body text-text-primary focus:border-accent-primary focus:outline-none"
-            >
-              <option value="">請選擇</option>
-              {contextType === "etf"
-                ? etfs.map((e) => (
-                    <option key={e.symbol} value={e.symbol}>
-                      {e.symbol} {e.name}
-                    </option>
-                  ))
-                : portfolios.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-            </select>
-          </div>
-        </div>
-        <p className="mb-space-4 text-small text-text-muted">
-          以上選擇將於 Phase 13 開放後，直接帶入 AI 分析請求的上下文，目前僅供預先設定，不會送出任何請求。
-        </p>
-
-        {/* 對話區 */}
-        <div className="mb-space-4 rounded-md border border-border-subtle bg-bg-inset p-space-4">
-          <EmptyState
-            title="此功能尚未開放"
-            description="目前呼叫後端 AI 分析端點會回傳 501（NOT_IMPLEMENTED）。AI 助手規劃於 Phase 13 開放，開放後將基於系統資料回答問題，並標示資料來源與日期，不提供買賣建議。"
+      <div className="grid grid-cols-1 gap-space-6 lg:grid-cols-[35%_1fr]">
+        {/* 左欄 */}
+        <div className="flex flex-col gap-space-4">
+          <ContextPicker
+            tab={tab}
+            onTabChange={(t) => {
+              setTab(t);
+              setPortfolioError(null);
+            }}
+            disabled={state === "loading"}
+            etfs={etfs}
+            etfSymbol={etfSymbol}
+            onEtfSymbolChange={setEtfSymbol}
+            portfolios={portfolios}
+            portfolioId={portfolioId}
+            onPortfolioIdChange={(id) => {
+              setPortfolioId(id);
+              setPortfolioError(null);
+            }}
+            portfolioError={portfolioError}
+            backtestResult={backtestResult}
+            projectionResult={projectionResult}
           />
-        </div>
 
-        {/* 輸入框 */}
-        <div className="flex gap-space-2">
-          <input
-            type="text"
-            disabled
-            placeholder="AI 分析功能即將推出"
-            title="AI 分析功能規劃中（Phase 13），目前後端回應 501"
-            className="flex-1 cursor-not-allowed rounded-sm border border-border-subtle bg-bg-inset px-space-2 py-2 text-body text-text-muted"
-          />
+          <QuestionInput value={question} onChange={setQuestion} disabled={state === "loading"} />
+
           <button
-            disabled
-            title="AI 分析功能規劃中（Phase 13），目前後端回應 501"
-            className="cursor-not-allowed rounded-sm border border-border-subtle bg-bg-surface-raised px-space-4 py-2 text-body text-text-muted"
+            onClick={handleSubmit}
+            disabled={!canSubmit}
+            className="rounded-sm bg-accent-primary px-space-4 py-2 text-body text-white transition-colors hover:bg-accent-primary-hover disabled:opacity-50"
           >
-            送出
+            {state === "loading" ? "分析中..." : "開始分析"}
           </button>
         </div>
-      </div>
 
-      <SourceFooter
-        sourceName="ETF Portfolio Lab 系統資料"
-        dataDate={null}
-        disclaimer="AI 助手功能規劃中（Phase 13），目前不提供任何分析結果。開放後將僅基於系統資料回答，附資料來源與日期，且不提供買賣建議。"
-      />
+        {/* 右欄 */}
+        <div className="rounded-md border border-border-subtle bg-bg-surface p-space-4">
+          <AnalysisResultPanel state={state} result={result} error={error} onRetry={handleSubmit} />
+        </div>
+      </div>
     </div>
+  );
+}
+
+export default function AiAssistantPage() {
+  return (
+    <Suspense fallback={<LoadingSkeleton variant="card" />}>
+      <AiAssistantContent />
+    </Suspense>
   );
 }

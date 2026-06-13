@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import PageHeader from "@/components/layout/PageHeader";
 import MetricCard from "@/components/common/MetricCard";
 import ChartCard from "@/components/common/ChartCard";
@@ -49,6 +49,7 @@ function gradeSharpe(value: number | null): { label: string; tone: BadgeTone } |
 type FetchState = "idle" | "loading" | "ok" | "error";
 
 function BacktestContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
 
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
@@ -330,6 +331,22 @@ function BacktestContent() {
 
       {state === "ok" && result && (
         <>
+          <div className="mb-space-4 flex justify-end">
+            <button
+              onClick={() => {
+                try {
+                  sessionStorage.setItem("ai:lastBacktest", JSON.stringify(result));
+                } catch {
+                  // ignore storage errors
+                }
+                router.push("/ai?context=backtest");
+              }}
+              className="rounded-sm border border-border-strong px-space-4 py-2 text-body text-text-primary transition-colors hover:bg-bg-surface-raised"
+            >
+              以 AI 解釋此結果
+            </button>
+          </div>
+
           <div className="mb-space-8 grid grid-cols-1 gap-space-4 sm:grid-cols-2 lg:grid-cols-4">
             <MetricCard
               label="最終資產價值"
