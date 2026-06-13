@@ -1,14 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import PageHeader from "@/components/layout/PageHeader";
 import MetricCard from "@/components/common/MetricCard";
 import Badge, { confidenceLevelTone, BadgeTone } from "@/components/common/Badge";
 import DataTable, { Column } from "@/components/tables/DataTable";
 import SourceFooter from "@/components/common/SourceFooter";
 import { ErrorState, LoadingSkeleton, errorToFriendlyMessage } from "@/components/common/States";
-import { listDataSources, listDataQuality, listFetchLogs } from "@/lib/api";
-import type { DataSource, DataQualityCheck, FetchLog } from "@/lib/types";
+import {
+  listDataSources,
+  listDataQuality,
+  listFetchLogs,
+  startDataRefresh,
+  getDataRefreshStatus,
+} from "@/lib/api";
+import type { DataSource, DataQualityCheck, FetchLog, RefreshStatus } from "@/lib/types";
 import { formatDateTime } from "@/lib/format";
 
 type FetchState = "loading" | "ok" | "empty" | "error";
@@ -81,6 +87,10 @@ export default function DataSourcesPage() {
   const [fetchLogsState, setFetchLogsState] = useState<FetchState>("loading");
   const [fetchLogsErr, setFetchLogsErr] = useState<{ code: string; message: string } | null>(null);
 
+  const [refreshStatus, setRefreshStatus] = useState<RefreshStatus | null>(null);
+  const [refreshErr, setRefreshErr] = useState<{ code: string; message: string } | null>(null);
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   function loadSources() {
     setSourcesState("loading");
     listDataSources()
@@ -120,10 +130,74 @@ export default function DataSourcesPage() {
       });
   }
 
+  function isRefreshActive(status: RefreshStatus | null): boolean {
+    if (!status) return false;
+    return status.running === true || status.phase === "listing" || status.phase === "prices";
+  }
+
+  function stopPolling() {
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+  }
+
+  function pollRefreshStatus() {
+    getDataRefreshStatus()
+      .then((status) => {
+        setRefreshStatus(status);
+        if (!isRefreshActive(status)) {
+          stopPolling();
+          if (status.phase === "done" || status.phase === "error") {
+            loadSources();
+            loadQuality(statusFilter);
+            loadFetchLogs();
+          }
+        }
+      })
+      .catch((e: unknown) => {
+        setRefreshErr(errorToFriendlyMessage(e));
+        stopPolling();
+      });
+  }
+
+  function startPolling() {
+    stopPolling();
+    pollIntervalRef.current = setInterval(pollRefreshStatus, 3000);
+  }
+
+  function handleStartRefresh() {
+    setRefreshErr(null);
+    startDataRefresh()
+      .then((res) => {
+        setRefreshStatus(res);
+        if (isRefreshActive(res)) {
+          startPolling();
+        }
+      })
+      .catch((e: unknown) => {
+        setRefreshErr(errorToFriendlyMessage(e));
+      });
+  }
+
   useEffect(() => {
     loadSources();
     loadQuality("all");
     loadFetchLogs();
+    // Check if a refresh is already running on mount
+    getDataRefreshStatus()
+      .then((status) => {
+        setRefreshStatus(status);
+        if (isRefreshActive(status)) {
+          startPolling();
+        }
+      })
+      .catch(() => {
+        // ignore - refresh status is best-effort
+      });
+    return () => {
+      stopPolling();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -170,6 +244,42 @@ export default function DataSourcesPage() {
   return (
     <div>
       <PageHeader title="資料來源管理" subtitle="檢視資料來源清單、資料品質檢查結果，以及匯入方式說明。" />
+
+      {/* 一鍵更新資料 */}
+      <div className="mb-space-8 rounded-md border border-border-subtle bg-bg-surface p-space-4">
+        <div className="flex flex-wrap items-center justify-between gap-space-2">
+          <div>
+            <h2 className="text-h2 text-text-primary">一鍵更新資料</h2>
+            <p className="mt-space-1 text-small text-text-muted">
+              會從 TWSE／Yahoo 抓取 ETF 清單與價格，需數分鐘；成分股尚未包含。
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleStartRefresh}
+            disabled={isRefreshActive(refreshStatus)}
+            className="rounded-sm border border-accent-primary bg-accent-primary px-space-4 py-2 text-body text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isRefreshActive(refreshStatus) ? "更新中…" : "更新資料"}
+          </button>
+        </div>
+        {isRefreshActive(refreshStatus) && refreshStatus && (
+          <p className="mt-space-3 text-small text-text-secondary">
+            {refreshStatus.phase === "listing" && "抓取 ETF 清單中…"}
+            {refreshStatus.phase === "prices" &&
+              `抓取價格中 ${refreshStatus.processed}/${refreshStatus.total}（成功 ${refreshStatus.succeeded}／失敗 ${refreshStatus.failed}）`}
+          </p>
+        )}
+        {!isRefreshActive(refreshStatus) && refreshStatus && refreshStatus.phase === "done" && (
+          <p className="mt-space-3 text-small text-text-secondary">{refreshStatus.message}</p>
+        )}
+        {!isRefreshActive(refreshStatus) && refreshStatus && refreshStatus.phase === "error" && (
+          <ErrorState message={refreshStatus.message} />
+        )}
+        {refreshErr && (
+          <p className="mt-space-3 text-small text-status-error">{refreshErr.message}</p>
+        )}
+      </div>
 
       {/* 上方指標卡 */}
       <div className="mb-space-8 grid grid-cols-1 gap-space-4 sm:grid-cols-3">
