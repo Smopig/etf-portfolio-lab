@@ -13,7 +13,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+# NOTE: do not ignore a bare "lib/" — it wrongly swallowed frontend/lib (the
+# Next.js app's lib directory). Python build artifacts live under build/ above.
 lib64/
 parts/
 sdist/
