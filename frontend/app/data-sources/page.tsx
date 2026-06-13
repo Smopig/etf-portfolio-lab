@@ -7,8 +7,8 @@ import Badge, { confidenceLevelTone, BadgeTone } from "@/components/common/Badge
 import DataTable, { Column } from "@/components/tables/DataTable";
 import SourceFooter from "@/components/common/SourceFooter";
 import { ErrorState, LoadingSkeleton, errorToFriendlyMessage } from "@/components/common/States";
-import { listDataSources, listDataQuality } from "@/lib/api";
-import type { DataSource, DataQualityCheck } from "@/lib/types";
+import { listDataSources, listDataQuality, listFetchLogs } from "@/lib/api";
+import type { DataSource, DataQualityCheck, FetchLog } from "@/lib/types";
 import { formatDateTime } from "@/lib/format";
 
 type FetchState = "loading" | "ok" | "empty" | "error";
@@ -31,6 +31,17 @@ const QUALITY_COLUMNS: Column[] = [
   { key: "checked_at", label: "檢查時間", format: "date", sortable: true },
 ];
 
+const FETCH_LOG_COLUMNS: Column[] = [
+  { key: "provider_name", label: "來源", sortable: true },
+  { key: "dataset_type", label: "資料類型", sortable: true },
+  { key: "status_label", label: "狀態", sortable: true },
+  { key: "rows_fetched", label: "擷取筆數", format: "number", sortable: true },
+  { key: "rows_inserted", label: "寫入筆數", format: "number", sortable: true },
+  { key: "data_date", label: "資料日期", format: "date", sortable: true },
+  { key: "started_at", label: "開始時間", format: "date", sortable: true },
+  { key: "message", label: "訊息" },
+];
+
 const STATUS_OPTIONS = [
   { value: "all", label: "全部狀態" },
   { value: "FAIL", label: "FAIL" },
@@ -49,6 +60,13 @@ function reliabilityTone(level: string | null): BadgeTone {
   return confidenceLevelTone(level ?? undefined);
 }
 
+function fetchLogStatusLabel(status: string): string {
+  if (status === "success") return "成功";
+  if (status === "error") return "失敗";
+  if (status === "empty") return "無資料";
+  return status;
+}
+
 export default function DataSourcesPage() {
   const [sources, setSources] = useState<DataSource[]>([]);
   const [sourcesState, setSourcesState] = useState<FetchState>("loading");
@@ -58,6 +76,10 @@ export default function DataSourcesPage() {
   const [qualityState, setQualityState] = useState<FetchState>("loading");
   const [qualityErr, setQualityErr] = useState<{ code: string; message: string } | null>(null);
   const [statusFilter, setStatusFilter] = useState("all");
+
+  const [fetchLogs, setFetchLogs] = useState<FetchLog[]>([]);
+  const [fetchLogsState, setFetchLogsState] = useState<FetchState>("loading");
+  const [fetchLogsErr, setFetchLogsErr] = useState<{ code: string; message: string } | null>(null);
 
   function loadSources() {
     setSourcesState("loading");
@@ -85,9 +107,23 @@ export default function DataSourcesPage() {
       });
   }
 
+  function loadFetchLogs() {
+    setFetchLogsState("loading");
+    listFetchLogs({ limit: 50 })
+      .then((data) => {
+        setFetchLogs(data);
+        setFetchLogsState(data.length === 0 ? "empty" : "ok");
+      })
+      .catch((e: unknown) => {
+        setFetchLogsErr(errorToFriendlyMessage(e));
+        setFetchLogsState("error");
+      });
+  }
+
   useEffect(() => {
     loadSources();
     loadQuality("all");
+    loadFetchLogs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -115,6 +151,12 @@ export default function DataSourcesPage() {
     ) : (
       "—"
     ),
+  }));
+
+  const fetchLogRows = fetchLogs.map((f) => ({
+    ...f,
+    status_label: fetchLogStatusLabel(f.status),
+    message: f.message ?? "—",
   }));
 
   const qualityRows = quality.map((q) => ({
@@ -215,6 +257,26 @@ python -m scripts.import_industry_mapping`}
         <p className="mt-space-3 text-small text-text-muted">
           以上為示意指令名稱，實際腳本請參考後端 scripts/ 目錄。匯入完成後，可在上方「資料品質檢查」表格中確認最新檢查結果。
         </p>
+      </div>
+
+      {/* 資料擷取紀錄 */}
+      <div className="mb-space-8">
+        <h2 className="mb-space-4 text-h2 text-text-primary">資料擷取紀錄</h2>
+        {fetchLogsState === "loading" && <LoadingSkeleton variant="table" />}
+        {fetchLogsState === "error" && (
+          <ErrorState code={fetchLogsErr?.code} message={fetchLogsErr?.message} retry={loadFetchLogs} />
+        )}
+        {(fetchLogsState === "ok" || fetchLogsState === "empty") && (
+          <DataTable
+            columns={FETCH_LOG_COLUMNS}
+            rows={fetchLogRows}
+            searchable
+            emptyState={{
+              title: "尚無擷取紀錄",
+              description: "執行 scripts/run_fetch.py 或各資料來源的擷取流程後，將於此顯示擷取紀錄。",
+            }}
+          />
+        )}
       </div>
 
       <SourceFooter
