@@ -82,10 +82,43 @@ def test_yahoo_price_provider_success_with_fake_http():
 
     assert result.errors == []
     assert len(result.records) == 2
-    assert result.records[0]["etf_symbol"] == "0050.TW"
+    assert result.records[0]["etf_symbol"] == "0050"
     assert result.records[0]["close"] == 101.0
     assert result.source_name == "yahoo-finance"
     assert result.data_date is not None
+
+
+def test_yahoo_price_provider_explicit_etf_symbol_used_verbatim():
+    payload = {
+        "chart": {
+            "result": [
+                {
+                    "timestamp": [1700000000],
+                    "indicators": {
+                        "quote": [
+                            {
+                                "open": [100.0],
+                                "high": [102.0],
+                                "low": [99.0],
+                                "close": [101.0],
+                                "volume": [1000],
+                            }
+                        ],
+                        "adjclose": [{"adjclose": [101.0]}],
+                    },
+                }
+            ],
+            "error": None,
+        }
+    }
+
+    def fake_http_get(url: str) -> bytes:
+        return json.dumps(payload).encode("utf-8")
+
+    provider = YahooPriceProvider(http_get=fake_http_get)
+    result = provider.fetch(symbol="0050.TW", etf_symbol="0050XYZ")
+
+    assert result.records[0]["etf_symbol"] == "0050XYZ"
 
 
 def test_yahoo_price_provider_failure_returns_no_fabrication():
