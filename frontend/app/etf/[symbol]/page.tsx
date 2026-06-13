@@ -60,6 +60,13 @@ function managementTypeBadge(value: string | null): { label: string; tone: Badge
   return { label: value ?? "—", tone: "neutral" };
 }
 
+function formatCompactVolume(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return "—";
+  if (value >= 1e8) return `${formatNumber(value / 1e8, { decimals: 2 })}億`;
+  if (value >= 1e4) return `${formatNumber(value / 1e4, { decimals: 2 })}萬`;
+  return formatInteger(value);
+}
+
 type FetchState = "loading" | "ok" | "empty" | "error";
 
 const HOLDINGS_COLUMNS: Column[] = [
@@ -196,34 +203,87 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
   const priceChartOption = useMemo(() => {
     if (!prices) return null;
     const dates = prices.points.map((p) => p.date);
+    const volumes = prices.points.map((p) => p.volume ?? 0);
+
+    const sharedGrid = [
+      { left: 60, right: 20, top: 30, height: "55%" },
+      { left: 60, right: 20, top: "70%", height: "22%" },
+    ];
+
+    const sharedXAxis = [
+      {
+        type: "category",
+        data: dates,
+        gridIndex: 0,
+        axisLabel: { show: false },
+        axisTick: { show: false },
+        splitLine: { show: false },
+      },
+      {
+        type: "category",
+        data: dates,
+        gridIndex: 1,
+        axisLabel: { color: "var(--text-secondary)" },
+        axisLine: { onZero: false },
+        splitLine: { show: false },
+      },
+    ];
+
+    const sharedYAxis = [
+      {
+        type: "value",
+        scale: true,
+        gridIndex: 0,
+        axisLabel: { color: "var(--text-secondary)" },
+        splitLine: { lineStyle: { color: "var(--border-subtle)" } },
+      },
+      {
+        type: "value",
+        gridIndex: 1,
+        axisLabel: {
+          color: "var(--text-secondary)",
+          formatter: (value: number) => formatCompactVolume(value),
+        },
+        splitLine: { show: false },
+      },
+    ];
+
+    const axisPointerLink = { link: [{ xAxisIndex: "all" }] };
 
     if (priceChartType === "candlestick") {
+      const volumeData = prices.points.map((p) => ({
+        value: p.volume ?? 0,
+        itemStyle: { color: (p.close ?? 0) >= (p.open ?? 0) ? "#e23b3b" : "#18a058" },
+      }));
       return {
-        grid: { left: 60, right: 20, top: 30, bottom: 40 },
+        grid: sharedGrid,
+        axisPointer: axisPointerLink,
         tooltip: {
           trigger: "axis",
-          formatter: (params: { axisValue: string; data: number[] }[]) => {
-            const p = params[0];
-            const [open, close, low, high] = p.data;
-            return `${p.axisValue}<br/>開：${formatNumber(open, { decimals: 2 })}<br/>高：${formatNumber(high, { decimals: 2 })}<br/>低：${formatNumber(low, { decimals: 2 })}<br/>收：${formatNumber(close, { decimals: 2 })}`;
+          formatter: (params: { axisValue: string; seriesName: string; data: number[] | { value: number; itemStyle?: unknown } }[]) => {
+            const pricePoint = params.find((p) => p.seriesName === "K線");
+            const volumePoint = params.find((p) => p.seriesName === "成交量");
+            const axisValue = params[0]?.axisValue ?? "";
+            let lines = `${axisValue}`;
+            if (pricePoint && Array.isArray(pricePoint.data)) {
+              const [open, close, low, high] = pricePoint.data;
+              lines += `<br/>開：${formatNumber(open, { decimals: 2 })}<br/>高：${formatNumber(high, { decimals: 2 })}<br/>低：${formatNumber(low, { decimals: 2 })}<br/>收：${formatNumber(close, { decimals: 2 })}`;
+            }
+            if (volumePoint) {
+              const vol = Array.isArray(volumePoint.data) ? 0 : volumePoint.data.value;
+              lines += `<br/>成交量：${formatCompactVolume(vol)}`;
+            }
+            return lines;
           },
         },
-        xAxis: {
-          type: "category",
-          data: dates,
-          axisLabel: { color: "var(--text-secondary)" },
-          splitLine: { show: false },
-        },
-        yAxis: {
-          type: "value",
-          scale: true,
-          axisLabel: { color: "var(--text-secondary)" },
-          splitLine: { lineStyle: { color: "var(--border-subtle)" } },
-        },
+        xAxis: sharedXAxis,
+        yAxis: sharedYAxis,
         series: [
           {
             type: "candlestick",
             name: "K線",
+            xAxisIndex: 0,
+            yAxisIndex: 0,
             data: prices.points.map((p) => [p.open, p.close, p.low, p.high]),
             itemStyle: {
               color: "#e23b3b",
@@ -232,40 +292,58 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
               borderColor0: "#18a058",
             },
           },
+          {
+            type: "bar",
+            name: "成交量",
+            xAxisIndex: 1,
+            yAxisIndex: 1,
+            data: volumeData,
+          },
         ],
       };
     }
 
     return {
-      grid: { left: 60, right: 20, top: 30, bottom: 40 },
+      grid: sharedGrid,
+      axisPointer: axisPointerLink,
       tooltip: {
         trigger: "axis",
-        formatter: (params: { axisValue: string; value: number }[]) => {
-          const p = params[0];
-          return `${p.axisValue}<br/>收盤價：${formatNumber(p.value, { decimals: 2 })}`;
+        formatter: (params: { axisValue: string; seriesName: string; value: number }[]) => {
+          const pricePoint = params.find((p) => p.seriesName === "收盤價");
+          const volumePoint = params.find((p) => p.seriesName === "成交量");
+          const axisValue = params[0]?.axisValue ?? "";
+          let lines = `${axisValue}`;
+          if (pricePoint) {
+            lines += `<br/>收盤價：${formatNumber(pricePoint.value, { decimals: 2 })}`;
+          }
+          if (volumePoint) {
+            lines += `<br/>成交量：${formatCompactVolume(volumePoint.value)}`;
+          }
+          return lines;
         },
       },
-      xAxis: {
-        type: "category",
-        data: dates,
-        axisLabel: { color: "var(--text-secondary)" },
-      },
-      yAxis: {
-        type: "value",
-        scale: true,
-        axisLabel: { color: "var(--text-secondary)" },
-        splitLine: { lineStyle: { color: "var(--border-subtle)" } },
-      },
+      xAxis: sharedXAxis,
+      yAxis: sharedYAxis,
       series: [
         {
           type: "line",
           name: "收盤價",
+          xAxisIndex: 0,
+          yAxisIndex: 0,
           data: prices.points.map((p) => p.close),
           showSymbol: false,
           smooth: true,
           itemStyle: { color: "var(--accent-primary)" },
           lineStyle: { color: "var(--accent-primary)" },
           areaStyle: { color: "var(--accent-primary)", opacity: 0.08 },
+        },
+        {
+          type: "bar",
+          name: "成交量",
+          xAxisIndex: 1,
+          yAxisIndex: 1,
+          data: volumes,
+          itemStyle: { color: "var(--accent-primary)", opacity: 0.35 },
         },
       ],
     };
@@ -510,7 +588,7 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
                   K線
                 </button>
               </div>
-              <ReactECharts option={priceChartOption} style={{ width: "100%", height: "320px" }} />
+              <ReactECharts option={priceChartOption} style={{ width: "100%", height: "420px" }} />
             </div>
           )}
         </ChartCard>
