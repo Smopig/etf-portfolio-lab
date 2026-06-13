@@ -455,6 +455,53 @@ def test_backtest_persist_false(client):
     assert "final_value" in body or "metrics" in body
 
 
+def test_backtest_with_benchmark(client):
+    response = client.post(
+        "/api/backtests",
+        params={"persist": False},
+        json={
+            "symbols": ["0050", "006208"],
+            "weights": [0.6, 0.4],
+            "start_date": "2026-01-01",
+            "end_date": "2026-01-10",
+            "initial_amount": 100000,
+            "monthly_contribution": 0,
+            "dividend_reinvest": True,
+            "rebalance_frequency": "none",
+            "benchmark_symbol": "0050",
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()["data"]
+    assert body["benchmark"] is not None
+    assert body["benchmark"]["symbol"] == "0050"
+    assert len(body["benchmark"]["equity_curve"]) > 0
+    assert "cagr" in body["benchmark"]["metrics"]
+    assert "max_drawdown" in body["benchmark"]["metrics"]
+
+
+def test_backtest_with_unknown_benchmark_returns_null(client):
+    response = client.post(
+        "/api/backtests",
+        params={"persist": False},
+        json={
+            "symbols": ["0050", "006208"],
+            "weights": [0.6, 0.4],
+            "start_date": "2026-01-01",
+            "end_date": "2026-01-10",
+            "initial_amount": 100000,
+            "monthly_contribution": 0,
+            "dividend_reinvest": True,
+            "rebalance_frequency": "none",
+            "benchmark_symbol": "NOPE",
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()["data"]
+    assert body["benchmark"] is None
+    assert "final_value" in body
+
+
 # ---------------------------------------------------------------------------
 # projections
 # ---------------------------------------------------------------------------

@@ -63,6 +63,7 @@ function BacktestContent() {
   const [dividendReinvest, setDividendReinvest] = useState(true);
   const [rebalanceFrequency, setRebalanceFrequency] = useState("none");
   const [transactionCostRate, setTransactionCostRate] = useState("0.001425");
+  const [benchmarkSymbol, setBenchmarkSymbol] = useState("0050");
 
   const [state, setState] = useState<FetchState>("idle");
   const [error, setError] = useState<{ code: string; message: string } | null>(null);
@@ -119,6 +120,7 @@ function BacktestContent() {
       dividend_reinvest: dividendReinvest,
       rebalance_frequency: rebalanceFrequency,
       transaction_cost_rate: Number(transactionCostRate) || 0,
+      benchmark_symbol: benchmarkSymbol.trim() || null,
     };
 
     if (portfolioId) {
@@ -159,31 +161,59 @@ function BacktestContent() {
   }
 
   const assetChartOption = result
-    ? {
-        backgroundColor: "transparent",
-        grid: { left: 60, right: 24, top: 24, bottom: 40 },
-        tooltip: { trigger: "axis" },
-        xAxis: {
-          type: "category",
-          data: result.portfolio_value_series.map((p) => p.date),
-          axisLabel: { color: "var(--text-secondary)" },
-        },
-        yAxis: {
-          type: "value",
-          axisLabel: { color: "var(--text-secondary)" },
-          splitLine: { lineStyle: { color: "var(--border-subtle)" } },
-        },
-        series: [
+    ? (() => {
+        const portfolioMap = new Map(result.portfolio_value_series.map((p) => [p.date, p.value]));
+        const benchmarkMap = new Map(
+          (result.benchmark?.equity_curve ?? []).map((p) => [p.date, p.value])
+        );
+        const allDates = Array.from(
+          new Set([
+            ...result.portfolio_value_series.map((p) => p.date),
+            ...(result.benchmark?.equity_curve.map((p) => p.date) ?? []),
+          ])
+        ).sort();
+
+        const series: Record<string, unknown>[] = [
           {
-            name: "資產價值",
+            name: "組合",
             type: "line",
             showSymbol: false,
-            data: result.portfolio_value_series.map((p) => p.value),
-            lineStyle: { color: "var(--series-1)" },
-            areaStyle: { color: "var(--series-1)", opacity: 0.1 },
+            data: allDates.map((d) => portfolioMap.get(d) ?? null),
+            lineStyle: { color: "#5aa9ff" },
+            areaStyle: { color: "#5aa9ff", opacity: 0.1 },
+            connectNulls: true,
           },
-        ],
-      }
+        ];
+
+        if (result.benchmark) {
+          series.push({
+            name: `基準 ${result.benchmark.symbol}`,
+            type: "line",
+            showSymbol: false,
+            data: allDates.map((d) => benchmarkMap.get(d) ?? null),
+            lineStyle: { color: "#f5a623" },
+            connectNulls: true,
+          });
+        }
+
+        return {
+          backgroundColor: "transparent",
+          grid: { left: 60, right: 24, top: 40, bottom: 40 },
+          tooltip: { trigger: "axis" },
+          legend: { top: 0, textStyle: { color: "var(--text-secondary)" } },
+          xAxis: {
+            type: "category",
+            data: allDates,
+            axisLabel: { color: "var(--text-secondary)" },
+          },
+          yAxis: {
+            type: "value",
+            axisLabel: { color: "var(--text-secondary)" },
+            splitLine: { lineStyle: { color: "var(--border-subtle)" } },
+          },
+          series,
+        };
+      })()
     : null;
 
   const drawdownChartOption = result
@@ -328,6 +358,15 @@ function BacktestContent() {
             step="0.0001"
             value={transactionCostRate}
             onChange={(e) => setTransactionCostRate(e.target.value)}
+            className="w-full rounded-sm border border-border-subtle bg-bg-inset px-space-2 py-1 text-body text-text-primary focus:border-accent-primary focus:outline-none"
+          />
+        </div>
+        <div>
+          <label className="mb-space-1 block text-small text-text-secondary">比較基準</label>
+          <input
+            value={benchmarkSymbol}
+            onChange={(e) => setBenchmarkSymbol(e.target.value)}
+            placeholder="例如 0050（留空則不比較）"
             className="w-full rounded-sm border border-border-subtle bg-bg-inset px-space-2 py-1 text-body text-text-primary focus:border-accent-primary focus:outline-none"
           />
         </div>
