@@ -687,15 +687,15 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
           />
           <StrategyField
             label="總管理費用率"
-            value={card.expense_ratio !== null ? formatPercent(card.expense_ratio, { decimals: 2, isFraction: card.expense_ratio <= 1 }) : null}
+            value={card.expense_ratio !== null ? `${formatNumber(card.expense_ratio, { decimals: 2 })}%` : null}
           />
           <StrategyField
             label="經理費"
-            value={card.management_fee !== null ? formatPercent(card.management_fee, { decimals: 2, isFraction: card.management_fee <= 1 }) : null}
+            value={card.management_fee !== null ? `${formatNumber(card.management_fee, { decimals: 4 })}%` : null}
           />
           <StrategyField
             label="保管費"
-            value={card.custody_fee !== null ? formatPercent(card.custody_fee, { decimals: 2, isFraction: card.custody_fee <= 1 }) : null}
+            value={card.custody_fee !== null ? `${formatNumber(card.custody_fee, { decimals: 2 })}%` : null}
           />
           <StrategyField label="發行商" value={card.issuer} />
         </div>
