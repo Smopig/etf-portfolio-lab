@@ -8,6 +8,8 @@ import type {
   DataSource,
   DividendRankingRow,
   DividendRankingMeta,
+  DividendRecoveryRow,
+  DividendRecoveryMeta,
   RefreshStartResponse,
   RefreshStatus,
   EtfCard,
@@ -283,6 +285,15 @@ export async function getDividendRankingWithMeta(params?: {
       disclosure: "",
     },
   };
+}
+
+export async function getDividendRecoveryWithMeta(
+  symbol: string
+): Promise<{ rows: DividendRecoveryRow[]; meta: DividendRecoveryMeta | null }> {
+  const { data, meta } = await apiFetchWithMeta<DividendRecoveryRow[], DividendRecoveryMeta>(
+    `/api/etfs/${encodeURIComponent(symbol)}/dividend-recovery`
+  );
+  return { rows: data ?? [], meta: meta ?? null };
 }
 
 // ---------------------------------------------------------------------------
