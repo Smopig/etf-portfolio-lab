@@ -18,12 +18,15 @@ from collections.abc import Callable
 
 from app.core.database import SessionLocal
 from app.models import (
+    EtfDividend,
+    EtfDividendFrequencyOverride,
     EtfHolding,
     EtfHoldingSnapshot,
     EtfHoldingSnapshotItem,
     EtfMaster,
     EtfPrice,
 )
+from app.services.dividend_ranking_service import classify_frequency
 from app.providers.data.factory import get_data_provider
 from app.services.data_fetch_service import run_fetch
 
@@ -38,6 +41,7 @@ def run_full_fetch(
     limit: int | None = None,
     market: str = "both",
     holdings: bool = True,
+    dividends: bool = True,
 ) -> dict:
     """Run the full ETF-list + prices fetch, creating its own DB session.
 
@@ -141,31 +145,32 @@ def run_full_fetch(
             "failed": n_failed,
         }
 
+        done_parts = [f"價格 成功 {n_succeeded} / 失敗 {n_failed}"]
+
         if holdings:
             holdings_summary = _run_holdings_phase(session, report)
             result["holdings"] = holdings_summary
-            h_succ = holdings_summary["succeeded"]
-            h_fail = holdings_summary["failed"]
-            report(
-                phase="done",
-                total=holdings_summary["symbols_processed"],
-                processed=holdings_summary["symbols_processed"],
-                succeeded=h_succ,
-                failed=h_fail,
-                message=(
-                    f"完成：價格 成功 {n_succeeded} / 失敗 {n_failed}；"
-                    f"成分股 成功 {h_succ} / 失敗 {h_fail}"
-                ),
+            done_parts.append(
+                f"成分股 成功 {holdings_summary['succeeded']} / "
+                f"失敗 {holdings_summary['failed']}"
             )
-        else:
-            report(
-                phase="done",
-                total=n_total,
-                processed=n_total,
-                succeeded=n_succeeded,
-                failed=n_failed,
-                message=f"完成：成功 {n_succeeded} / 失敗 {n_failed}",
+
+        if dividends:
+            dividends_summary = _run_dividends_phase(session, report)
+            result["dividends"] = dividends_summary
+            done_parts.append(
+                f"配息 成功 {dividends_summary['succeeded']} / "
+                f"失敗 {dividends_summary['failed']}"
             )
+
+        report(
+            phase="done",
+            total=n_total,
+            processed=n_total,
+            succeeded=n_succeeded,
+            failed=n_failed,
+            message="完成：" + "；".join(done_parts),
+        )
         return result
     finally:
         session.close()
@@ -381,6 +386,156 @@ def _replace_holdings_for_snapshot(session, symbol: str, result) -> None:
         )
 
     session.commit()
+
+
+def _run_dividends_phase(session, report) -> dict:
+    """Dividends phase: fetch Yahoo dividends for active ETFs with price data.
+
+    For each ETF:
+    - Replace existing rows keyed by (etf_symbol, ex_dividend_date, source_name)
+      with the freshly fetched paid distributions (upcoming rows are NOT
+      persisted, so TTM logic never sees unpaid distributions).
+    - Set EtfMaster.dividend_frequency from classification IF currently null
+      and no override exists (never overwrite an existing value / override).
+
+    On provider failure or empty result: DO NOT delete existing rows.
+    Per-ETF failures never abort the job (per-ETF rollback).
+    """
+    symbols = [
+        s
+        for (s,) in session.query(EtfMaster.symbol)
+        .filter(EtfMaster.is_active.is_(True))
+        .filter(
+            session.query(EtfPrice.id)
+            .filter(EtfPrice.etf_symbol == EtfMaster.symbol)
+            .exists()
+        )
+        .order_by(EtfMaster.symbol)
+        .all()
+    ]
+    n_total = len(symbols)
+    n_succ = 0
+    n_fail = 0
+
+    report(
+        phase="dividends",
+        total=n_total,
+        processed=0,
+        succeeded=0,
+        failed=0,
+        message=f"抓取配息中 0/{n_total}",
+    )
+
+    provider = get_data_provider("yahoo-dividends")
+
+    for i, symbol in enumerate(symbols, start=1):
+        ok = False
+        try:
+            result = provider.fetch(symbol=symbol)
+            if result.records:
+                _replace_dividends(session, symbol, result)
+                _maybe_set_frequency(session, symbol, result)
+                session.commit()
+                ok = True
+        except Exception:  # noqa: BLE001
+            # Roll back so a failed ETF does NOT poison the session and
+            # cascade-fail every subsequent ETF.
+            session.rollback()
+            ok = False
+
+        if ok:
+            n_succ += 1
+        else:
+            n_fail += 1
+
+        report(
+            phase="dividends",
+            total=n_total,
+            processed=i,
+            succeeded=n_succ,
+            failed=n_fail,
+            message=f"抓取配息中 {i}/{n_total}",
+        )
+        time.sleep(0.4)
+
+    return {
+        "symbols_processed": n_total,
+        "succeeded": n_succ,
+        "failed": n_fail,
+    }
+
+
+def _replace_dividends(session, symbol: str, result) -> None:
+    """Replace dividend rows for this ETF keyed by the unique constraint.
+
+    Only paid (non-upcoming) distributions are persisted so TTM never sees
+    unpaid rows. Does NOT commit (the caller commits once per ETF).
+    """
+    paid = [rec for rec in result.records if not rec.get("is_upcoming")]
+    if not paid:
+        return
+
+    # Delete the exact rows we're about to (re)insert, keyed by the unique
+    # constraint (etf_symbol, ex_dividend_date, source_name).
+    keys = {
+        (rec.get("ex_dividend_date"), rec.get("source_name"))
+        for rec in paid
+        if rec.get("ex_dividend_date") is not None
+    }
+    for ex_date, source_name in keys:
+        session.query(EtfDividend).filter(
+            EtfDividend.etf_symbol == symbol,
+            EtfDividend.ex_dividend_date == ex_date,
+            EtfDividend.source_name == source_name,
+        ).delete(synchronize_session=False)
+
+    # Collapse duplicate (ex_dividend_date, source_name) records.
+    deduped: dict[tuple, dict] = {}
+    for rec in paid:
+        ex_date = rec.get("ex_dividend_date")
+        if ex_date is None:
+            continue
+        deduped[(ex_date, rec.get("source_name"))] = rec
+
+    for rec in deduped.values():
+        session.add(
+            EtfDividend(
+                etf_symbol=symbol,
+                ex_dividend_date=rec.get("ex_dividend_date"),
+                payment_date=rec.get("payment_date"),
+                dividend_amount=rec.get("dividend_amount"),
+                source_name=rec.get("source_name"),
+                source_url=rec.get("source_url"),
+                fetched_at=rec.get("fetched_at"),
+            )
+        )
+
+
+def _maybe_set_frequency(session, symbol: str, result) -> None:
+    """Set EtfMaster.dividend_frequency from classification if currently null.
+
+    Never overwrites an existing value, and never overrides a manual
+    EtfDividendFrequencyOverride row.
+    """
+    master = (
+        session.query(EtfMaster).filter(EtfMaster.symbol == symbol).first()
+    )
+    if master is None or master.dividend_frequency:
+        return
+
+    has_override = (
+        session.query(EtfDividendFrequencyOverride.id)
+        .filter(EtfDividendFrequencyOverride.etf_symbol == symbol)
+        .first()
+        is not None
+    )
+    if has_override:
+        return
+
+    paid = [rec for rec in result.records if not rec.get("is_upcoming")]
+    if not paid:
+        return
+    master.dividend_frequency = classify_frequency(paid)
 
 
 class RefreshJob:
