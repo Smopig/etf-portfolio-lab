@@ -251,7 +251,7 @@ export default function DataSourcesPage() {
           <div>
             <h2 className="text-h2 text-text-primary">一鍵更新資料</h2>
             <p className="mt-space-1 text-small text-text-muted">
-              會從 TWSE／Yahoo 抓取 ETF 清單與價格，需數分鐘；成分股尚未包含。
+              會從 TWSE／Yahoo 抓取 ETF 清單與價格，並抓取成分股（元大 ETF 取完整名單，其餘取前 10 大），需數分鐘。
             </p>
           </div>
           <button
