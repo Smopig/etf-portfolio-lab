@@ -23,6 +23,9 @@ const FALLBACKS: Record<string, string> = {
   "--text-primary": "#e5e9f0",
   "--text-secondary": "#9aa5b8",
   "--text-muted": "#6b7484",
+  "--border-subtle": "#232a38",
+  "--accent-primary": "#3b82f6",
+  "--status-error": "#ef4444",
 };
 
 /**

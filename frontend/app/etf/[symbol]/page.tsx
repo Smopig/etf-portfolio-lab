@@ -12,22 +12,9 @@ import { EmptyState, ErrorState, LoadingSkeleton, errorToFriendlyMessage } from 
 import { getEtfCard, getConcentration, getHoldings, getHoldingsWithMeta, getIndustryExposure, getEtfPrices } from "@/lib/api";
 import type { Concentration, EtfCard, EtfPriceHistory, Holding, HoldingsMeta, IndustryExposure } from "@/lib/types";
 import { formatDate, formatInteger, formatNumber, formatPercent } from "@/lib/format";
+import { chartColor, seriesPalette } from "@/lib/chartColors";
 
 const ReactECharts = dynamic(() => import("echarts-for-react"), { ssr: false });
-
-const SERIES_COLORS = [
-  "var(--series-1)",
-  "var(--series-2)",
-  "var(--series-3)",
-  "var(--series-4)",
-  "var(--series-5)",
-  "var(--series-6)",
-  "var(--series-7)",
-  "var(--series-8)",
-  "var(--series-9)",
-  "var(--series-10)",
-];
-const UNCLASSIFIED_COLOR = "var(--series-unclassified)";
 
 // ---------------------------------------------------------------------------
 // Presentation-only grading heuristics (not backend-defined thresholds).
@@ -480,7 +467,7 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
           xAxisIndex: 1,
           yAxisIndex: 1,
           data: volumes,
-          itemStyle: { color: "var(--accent-primary)", opacity: 0.35 },
+          itemStyle: { color: chartColor("--accent-primary"), opacity: 0.35 },
         },
       ],
     };
@@ -523,7 +510,7 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
         {
           type: "bar",
           data: sorted.map((h) => h.weight_pct),
-          itemStyle: { color: "var(--series-1)" },
+          itemStyle: { color: chartColor("--series-1") },
         },
       ],
     };
@@ -531,16 +518,18 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
 
   const exposureChartOption = useMemo(() => {
     if (!exposure) return null;
+    const palette = seriesPalette();
+    const textSecondary = chartColor("--text-secondary");
     const data = exposure.industries.map((it, i) => ({
       name: it.industry,
       value: it.weight_pct,
-      itemStyle: { color: SERIES_COLORS[i % SERIES_COLORS.length] },
+      itemStyle: { color: palette[i % palette.length] },
     }));
     if (exposure.unclassified && exposure.unclassified.weight_pct > 0) {
       data.push({
         name: exposure.unclassified.industry || "未分類",
         value: exposure.unclassified.weight_pct,
-        itemStyle: { color: UNCLASSIFIED_COLOR },
+        itemStyle: { color: chartColor("--series-unclassified") },
       });
     }
     return {
@@ -549,13 +538,13 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
         formatter: (p: { name: string; value: number }) =>
           `${p.name}<br/>占比：${formatPercent(p.value, { decimals: 2 })}`,
       },
-      legend: { orient: "vertical", left: "left", textStyle: { color: "var(--text-secondary)" } },
+      legend: { orient: "vertical", left: "left", textStyle: { color: textSecondary } },
       series: [
         {
           type: "pie",
           radius: ["40%", "70%"],
           avoidLabelOverlap: true,
-          label: { color: "var(--text-secondary)" },
+          label: { color: textSecondary },
           data,
         },
       ],
