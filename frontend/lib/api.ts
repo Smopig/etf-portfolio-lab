@@ -16,6 +16,7 @@ import type {
   GoalSeekRequestPayload,
   GoalSeekResult,
   Holding,
+  HoldingsMeta,
   IndustryExposure,
   IndustrySimilarity,
   MultiOverlap,
@@ -63,10 +64,10 @@ export class ApiError extends Error {
  * envelope, and throw a typed `ApiError` for `{error: {code, message}}`
  * responses or network failures.
  */
-export async function apiFetch<T = unknown>(
+export async function apiFetchWithMeta<T = unknown, M = Record<string, unknown>>(
   path: string,
   init?: RequestInit
-): Promise<T> {
+): Promise<{ data: T; meta: M | undefined }> {
   let res: Response;
   try {
     res = await fetch(`${API_BASE_URL}${path}`, {
@@ -106,8 +107,19 @@ export async function apiFetch<T = unknown>(
     throw new ApiError("INTERNAL_ERROR", res.statusText || "Request failed", res.status);
   }
 
-  const okBody = body as { data?: T } | null;
-  return (okBody?.data ?? (body as T)) as T;
+  const okBody = body as { data?: T; meta?: M } | null;
+  return {
+    data: (okBody?.data ?? (body as T)) as T,
+    meta: okBody?.meta,
+  };
+}
+
+export async function apiFetch<T = unknown>(
+  path: string,
+  init?: RequestInit
+): Promise<T> {
+  const { data } = await apiFetchWithMeta<T>(path, init);
+  return data;
 }
 
 function qs(params: Record<string, string | number | boolean | undefined | null>): string {
@@ -163,6 +175,19 @@ export async function getHoldings(
       n: params?.n,
     })}`
   );
+}
+
+export async function getHoldingsWithMeta(
+  symbol: string,
+  params?: { date?: string; n?: number }
+): Promise<{ holdings: Holding[]; meta: HoldingsMeta | null }> {
+  const { data, meta } = await apiFetchWithMeta<Holding[], HoldingsMeta>(
+    `/api/etfs/${encodeURIComponent(symbol)}/holdings${qs({
+      date: params?.date,
+      n: params?.n,
+    })}`
+  );
+  return { holdings: data, meta: meta ?? null };
 }
 
 export async function getConcentration(

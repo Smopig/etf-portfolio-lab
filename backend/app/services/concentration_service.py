@@ -54,7 +54,7 @@ def get_top_holdings(
     """Return the top ``n`` holdings of ``etf_symbol`` by weight, descending.
 
     Each item carries source metadata (CLAUDE.md §7): asset_symbol,
-    asset_name, weight, weight_fraction, weight_pct, holding_date,
+    asset_name, weight, weight_fraction, weight_pct, shares, holding_date,
     source_name, source_url, confidence_level.
     """
     resolved_date = _resolve_holding_date(session, etf_symbol, holding_date)
@@ -75,6 +75,7 @@ def get_top_holdings(
             "weight": float(r.weight) if r.weight is not None else None,
             "weight_fraction": frac,
             "weight_pct": frac * 100,
+            "shares": float(r.shares) if r.shares is not None else None,
             "holding_date": r.holding_date,
             "source_name": r.source_name,
             "source_url": r.source_url,
