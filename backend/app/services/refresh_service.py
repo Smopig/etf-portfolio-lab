@@ -241,6 +241,9 @@ def _run_holdings_phase(session, report) -> dict:
                 _replace_holdings_for_snapshot(session, symbol, result)
                 ok = True
         except Exception:  # noqa: BLE001
+            # Roll back so a failed ETF (e.g. an integrity error) does NOT
+            # poison the session and cascade-fail every subsequent ETF.
+            session.rollback()
             ok = False
 
         if ok:
@@ -294,16 +297,38 @@ def _replace_holdings_for_snapshot(session, symbol: str, result) -> None:
             EtfHolding.asset_symbol.in_(asset_syms),
         ).delete(synchronize_session=False)
 
-    # Insert fresh rows.
+    # Collapse duplicate (holding_date, asset_symbol) records before insert.
+    # A single ETF can legitimately hold several futures contracts that share
+    # one code (e.g. TX 臺股期貨 across expiries); these would otherwise violate
+    # the unique constraint. Sum their weight/shares so total exposure is kept.
+    deduped: dict[tuple, dict] = {}
     for rec in result.records:
         d = rec.get("holding_date")
         if isinstance(d, dt.datetime):
             d = d.date()
+        asset_symbol = (
+            str(rec.get("asset_symbol")) if rec.get("asset_symbol") is not None else None
+        )
+        key = (d, asset_symbol)
+        if key in deduped:
+            prev = deduped[key]
+            if rec.get("weight") is not None:
+                prev["weight"] = (prev.get("weight") or 0) + rec["weight"]
+            if rec.get("shares") is not None:
+                prev["shares"] = (prev.get("shares") or 0) + rec["shares"]
+        else:
+            merged = dict(rec)
+            merged["holding_date"] = d
+            merged["asset_symbol"] = asset_symbol
+            deduped[key] = merged
+
+    # Insert fresh rows.
+    for rec in deduped.values():
         session.add(
             EtfHolding(
                 etf_symbol=symbol,
-                holding_date=d,
-                asset_symbol=str(rec.get("asset_symbol")) if rec.get("asset_symbol") is not None else None,
+                holding_date=rec.get("holding_date"),
+                asset_symbol=rec.get("asset_symbol"),
                 asset_name=rec.get("asset_name"),
                 weight=rec.get("weight"),
                 shares=rec.get("shares"),
