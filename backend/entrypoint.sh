@@ -12,5 +12,10 @@ if [ "${SEED_SAMPLE_DATA:-false}" = "true" ]; then
   python -m scripts.seed || echo "[entrypoint] seed step skipped/failed (continuing)."
 fi
 
+if [ "${DEV_RELOAD:-false}" = "true" ]; then
+  echo "[entrypoint] DEV_RELOAD=true -> starting uvicorn with --reload..."
+  exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+fi
+
 echo "[entrypoint] Starting uvicorn..."
 exec uvicorn app.main:app --host 0.0.0.0 --port 8000

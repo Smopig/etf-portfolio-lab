@@ -24,11 +24,18 @@ services:
       DATABASE_URL: postgresql+psycopg2://etf:etf@db:5432/etf
       # 首次啟動載入 data/samples 範例資料（示意值，非權威市場資料）；設 false 可關閉
       SEED_SAMPLE_DATA: "true"
+      # 開發模式：開啟 uvicorn --reload，搭配下方原始碼掛載即時生效
+      DEV_RELOAD: "true"
     depends_on:
       db:
         condition: service_healthy
     volumes:
-      - ./backend:/app
+      # 掛到 app 實際執行的 /code 之下（WORKDIR=/code，見 backend/Dockerfile）。
+      # 不可整個掛 ./backend:/code，否則會蓋掉容器內的 /code/.venv。
+      - ./backend/app:/code/app
+      - ./backend/alembic:/code/alembic
+      - ./backend/alembic.ini:/code/alembic.ini
+      - ./backend/scripts:/code/scripts
       - ./data:/data
 
   frontend:

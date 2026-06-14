@@ -31,7 +31,11 @@ def get_price_history(
     if end is not None:
         query = query.filter(EtfPrice.trade_date <= end)
 
-    rows = query.order_by(EtfPrice.trade_date.asc()).limit(limit).all()
+    # Take the MOST RECENT ``limit`` rows (order desc + limit), then present
+    # them ascending. Ordering asc before limit would truncate the recent end
+    # and silently drop the latest data when a symbol has more rows than limit.
+    rows = query.order_by(EtfPrice.trade_date.desc()).limit(limit).all()
+    rows.reverse()
 
     if not rows:
         return {
