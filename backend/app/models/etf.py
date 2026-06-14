@@ -34,6 +34,11 @@ class EtfMaster(Base):
     custody_fee: Mapped[float | None] = mapped_column(Numeric)
     dividend_frequency: Mapped[str | None] = mapped_column(Text)
 
+    # 規模 (AUM, NTD) + 淨值 (NAV per unit, NTD) + 淨值資料日期.
+    aum: Mapped[float | None] = mapped_column(Numeric)
+    nav: Mapped[float | None] = mapped_column(Numeric)
+    nav_date: Mapped[date | None] = mapped_column(Date)
+
     source_name: Mapped[str | None] = mapped_column(Text)
     source_url: Mapped[str | None] = mapped_column(Text)
     data_date: Mapped[date | None] = mapped_column(Date)

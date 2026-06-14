@@ -43,6 +43,7 @@ def run_full_fetch(
     market: str = "both",
     holdings: bool = True,
     dividends: bool = True,
+    profile: bool = True,
 ) -> dict:
     """Run per-phase ETF data fetches, creating its own DB session.
 
@@ -72,6 +73,7 @@ def run_full_fetch(
             "prices": None,
             "holdings": None,
             "dividends": None,
+            "profile": None,
         }
         done_parts: list[str] = []
 
@@ -181,6 +183,15 @@ def run_full_fetch(
                 f"失敗 {holdings_summary['failed']}"
             )
 
+        # ── Phase: profile (Yuanta static fund profiles) ──────────────────
+        if profile:
+            profile_summary = _run_profile_phase(session, report)
+            result["profile"] = profile_summary
+            done_parts.append(
+                f"基本資料 更新 {profile_summary['updated']} / "
+                f"略過 {profile_summary['skipped']}"
+            )
+
         # ── Phase: dividends ──────────────────────────────────────────────
         if dividends:
             dividends_summary = _run_dividends_phase(session, report)
@@ -271,6 +282,7 @@ def _run_holdings_phase(session, report) -> dict:
                 result = yahoo_provider.fetch(symbol=symbol)
             if result.records:
                 _replace_holdings_for_snapshot(session, symbol, result)
+                _maybe_update_aum_nav(session, symbol, result)
                 ok = True
         except Exception:  # noqa: BLE001
             # Roll back so a failed ETF (e.g. an integrity error) does NOT
@@ -298,6 +310,32 @@ def _run_holdings_phase(session, report) -> dict:
         "succeeded": n_succ,
         "failed": n_fail,
     }
+
+
+def _maybe_update_aum_nav(session, symbol: str, result) -> None:
+    """Update EtfMaster.aum/nav/nav_date from a provider's fund_meta block.
+
+    Issuer-authoritative figures, so they always overwrite — but only with
+    non-None values (never wipe an existing figure with a missing one).
+    Committed by the caller (_replace_holdings_for_snapshot commits).
+    """
+    meta = getattr(result, "fund_meta", None)
+    if not isinstance(meta, dict):
+        return
+    aum = meta.get("aum")
+    nav = meta.get("nav")
+    nav_date = meta.get("nav_date")
+    if aum is None and nav is None and nav_date is None:
+        return
+    master = session.query(EtfMaster).filter(EtfMaster.symbol == symbol).first()
+    if master is None:
+        return
+    if aum is not None:
+        master.aum = aum
+    if nav is not None:
+        master.nav = nav
+    if nav_date is not None:
+        master.nav_date = nav_date
 
 
 def _replace_holdings_for_snapshot(session, symbol: str, result) -> None:
@@ -563,6 +601,105 @@ def _maybe_set_frequency(session, symbol: str, result) -> None:
     if not paid:
         return
     master.dividend_frequency = classify_frequency(paid)
+
+
+def _run_profile_phase(session, report) -> dict:
+    """Profile phase: fetch all Yuanta ETF profiles once and update EtfMaster.
+
+    A SINGLE call to the Yuanta ETFBackstage endpoint returns every Yuanta
+    fund. For each returned symbol that has a matching EtfMaster row we update
+    tracking_index / index_provider / listing_date / management_fee plus source
+    provenance. Non-null issuer figures ALWAYS overwrite (issuer-authoritative);
+    a null field in the response never wipes an existing value. Symbols not in
+    the profile data (non-Yuanta ETFs) are simply skipped — never an error.
+
+    Per-symbol safe; never aborts the job on a single failure.
+    """
+    report(
+        phase="profile",
+        total=0,
+        processed=0,
+        succeeded=0,
+        failed=0,
+        message="抓取 ETF 基本資料中...",
+    )
+
+    provider = get_data_provider("yuanta-profile")
+    try:
+        result = provider.fetch()
+    except Exception as exc:  # noqa: BLE001
+        report(
+            phase="profile",
+            total=0,
+            processed=0,
+            succeeded=0,
+            failed=0,
+            message=f"基本資料抓取失敗：{exc}",
+        )
+        return {"records": 0, "updated": 0, "skipped": 0, "errors": [str(exc)]}
+
+    records = result.records or []
+    n_total = len(records)
+    n_updated = 0
+    n_skipped = 0
+
+    for i, rec in enumerate(records, start=1):
+        symbol = rec.get("symbol")
+        if not symbol:
+            n_skipped += 1
+            continue
+        try:
+            master = (
+                session.query(EtfMaster)
+                .filter(EtfMaster.symbol == symbol)
+                .first()
+            )
+            if master is None:
+                n_skipped += 1
+                continue
+
+            changed = False
+            for field_name in (
+                "tracking_index",
+                "index_provider",
+                "listing_date",
+                "management_fee",
+            ):
+                value = rec.get(field_name)
+                if value is not None:
+                    setattr(master, field_name, value)
+                    changed = True
+
+            if changed:
+                master.source_name = rec.get("source_name")
+                master.source_url = rec.get("source_url")
+                if rec.get("listing_date") is not None:
+                    master.data_date = rec.get("listing_date")
+                master.fetched_at = rec.get("fetched_at")
+                master.confidence_level = rec.get("confidence_level")
+                session.commit()
+                n_updated += 1
+            else:
+                n_skipped += 1
+        except Exception:  # noqa: BLE001
+            session.rollback()
+            n_skipped += 1
+
+        report(
+            phase="profile",
+            total=n_total,
+            processed=i,
+            succeeded=n_updated,
+            failed=n_skipped,
+            message=f"更新 ETF 基本資料中 {i}/{n_total}",
+        )
+
+    return {
+        "records": n_total,
+        "updated": n_updated,
+        "skipped": n_skipped,
+        "errors": result.errors,
+    }
 
 
 class RefreshJob:

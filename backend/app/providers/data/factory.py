@@ -11,6 +11,7 @@ from app.providers.data.yahoo_dividend_provider import YahooDividendProvider
 from app.providers.data.yahoo_holding_provider import YahooHoldingProvider
 from app.providers.data.yahoo_price_provider import YahooPriceProvider
 from app.providers.data.yuanta_holding_provider import YuantaHoldingProvider
+from app.providers.data.yuanta_profile_provider import YuantaProfileProvider
 
 _PROVIDERS: dict[str, type[BaseDataProvider]] = {
     "local-file": CsvFileProvider,
@@ -25,6 +26,7 @@ _PROVIDERS: dict[str, type[BaseDataProvider]] = {
     "yahoo-holdings": YahooHoldingProvider,
     "yahoo-dividends": YahooDividendProvider,
     "yuanta-holdings": YuantaHoldingProvider,
+    "yuanta-profile": YuantaProfileProvider,
 }
 
 

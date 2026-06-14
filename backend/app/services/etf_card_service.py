@@ -46,6 +46,9 @@ def get_etf_card(session: Session, etf_symbol: str) -> dict | None:
         if master.custody_fee is not None
         else None,
         "dividend_frequency": master.dividend_frequency,
+        "aum": float(master.aum) if master.aum is not None else None,
+        "nav": float(master.nav) if master.nav is not None else None,
+        "nav_date": master.nav_date,
         "concentration": {
             "holding_date": concentration["holding_date"],
             "num_holdings": concentration["num_holdings"],
