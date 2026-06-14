@@ -491,6 +491,7 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
 
   const top10ChartOption = useMemo(() => {
     const sorted = [...top10].sort((a, b) => a.weight_pct - b.weight_pct);
+    const textSecondary = chartColor("--text-secondary");
     return {
       grid: { left: 120, right: 40, top: 20, bottom: 20 },
       tooltip: {
@@ -501,10 +502,11 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
           return `${p.name}<br/>權重：${formatPercent(p.value, { decimals: 2 })}`;
         },
       },
-      xAxis: { type: "value", axisLabel: { formatter: "{value}%" } },
+      xAxis: { type: "value", axisLabel: { formatter: "{value}%", color: textSecondary } },
       yAxis: {
         type: "category",
         data: sorted.map((h) => h.asset_name ?? h.asset_symbol),
+        axisLabel: { color: textSecondary },
       },
       series: [
         {
