@@ -171,6 +171,19 @@ def run_full_fetch(
         session.close()
 
 
+def _is_yuanta(issuer: str | None) -> bool:
+    """True if the ETF issuer is Yuanta (元大投信).
+
+    Matches on the Chinese name fragment "元大" or the English "yuanta"
+    (case-insensitive). Missing/ambiguous issuers return False so the caller
+    defaults to the Yahoo provider.
+    """
+    if not issuer:
+        return False
+    low = issuer.lower()
+    return "元大" in issuer or "yuanta" in low
+
+
 def _run_holdings_phase(session, report) -> dict:
     """Holdings phase: fetch Yahoo holdings for active ETFs with price data.
 
@@ -182,9 +195,10 @@ def _run_holdings_phase(session, report) -> dict:
     On provider failure or empty result: DO NOT delete existing rows.
     Per-ETF failures never abort the job.
     """
-    # ETFs that are active AND have at least one price row.
+    # ETFs that are active AND have at least one price row, with issuer so we
+    # can pick the best holdings provider per ETF.
     rows = (
-        session.query(EtfMaster.symbol)
+        session.query(EtfMaster.symbol, EtfMaster.issuer)
         .filter(EtfMaster.is_active.is_(True))
         .filter(
             session.query(EtfPrice.id)
@@ -194,7 +208,7 @@ def _run_holdings_phase(session, report) -> dict:
         .order_by(EtfMaster.symbol)
         .all()
     )
-    symbols = [s for (s,) in rows]
+    symbols = [(s, issuer) for (s, issuer) in rows]
     n_total = len(symbols)
     n_succ = 0
     n_fail = 0
@@ -208,12 +222,21 @@ def _run_holdings_phase(session, report) -> dict:
         message=f"抓取成分股中 0/{n_total}",
     )
 
-    provider = get_data_provider("yahoo-holdings")
+    yahoo_provider = get_data_provider("yahoo-holdings")
+    yuanta_provider = get_data_provider("yuanta-holdings")
 
-    for i, symbol in enumerate(symbols, start=1):
+    for i, (symbol, issuer) in enumerate(symbols, start=1):
         ok = False
         try:
-            result = provider.fetch(symbol=symbol)
+            result = None
+            # Yuanta-issued ETFs: use the issuer's authoritative full-list API
+            # (HIGH confidence). Fall back to Yahoo top-10 if it yields nothing.
+            if _is_yuanta(issuer):
+                result = yuanta_provider.fetch(symbol=symbol)
+                if not result.records:
+                    result = yahoo_provider.fetch(symbol=symbol)
+            else:
+                result = yahoo_provider.fetch(symbol=symbol)
             if result.records:
                 _replace_holdings_for_snapshot(session, symbol, result)
                 ok = True
@@ -283,6 +306,7 @@ def _replace_holdings_for_snapshot(session, symbol: str, result) -> None:
                 asset_symbol=str(rec.get("asset_symbol")) if rec.get("asset_symbol") is not None else None,
                 asset_name=rec.get("asset_name"),
                 weight=rec.get("weight"),
+                shares=rec.get("shares"),
                 source_name=rec.get("source_name"),
                 source_url=rec.get("source_url"),
                 fetched_at=rec.get("fetched_at") or fetched_at,
@@ -327,6 +351,7 @@ def _replace_holdings_for_snapshot(session, symbol: str, result) -> None:
                 asset_symbol=str(rec.get("asset_symbol")) if rec.get("asset_symbol") is not None else None,
                 asset_name=rec.get("asset_name"),
                 weight=rec.get("weight"),
+                shares=rec.get("shares"),
             )
         )
 
