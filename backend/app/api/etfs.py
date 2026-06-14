@@ -10,7 +10,11 @@ from sqlalchemy.orm import Session
 from app.api.responses import not_found, ok, validation_error
 from app.core.database import get_db
 from app.models import EtfMaster
-from app.services.concentration_service import get_concentration, get_top_holdings
+from app.services.concentration_service import (
+    get_concentration,
+    get_holdings_meta,
+    get_top_holdings,
+)
 from app.services.dashboard_service import (
     RANKING_METRICS,
     get_holdings_and_price_symbol_sets,
@@ -123,7 +127,9 @@ def get_holdings(
     n: int = Query(default=10, ge=1, le=200),
     db: Session = Depends(get_db),
 ) -> dict:
-    return ok(get_top_holdings(db, symbol, holding_date=date, n=n))
+    items = get_top_holdings(db, symbol, holding_date=date, n=n)
+    meta = get_holdings_meta(db, symbol, holding_date=date)
+    return ok(items, meta=meta)
 
 
 @router.get("/{symbol}/prices")

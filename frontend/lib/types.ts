@@ -101,6 +101,25 @@ export interface Holding {
   asset_name: string | null;
   weight_fraction: number;
   weight_pct: number;
+  /** Raw weight as stored by the source (may differ from normalized weight_pct). */
+  weight?: number | null;
+  /** Number of shares held; present for full-constituent sources (元大投信), null for Top-10 sources (Yahoo). */
+  shares?: number | null;
+  holding_date?: string | null;
+  source_name?: string | null;
+  /** Raw source confidence, e.g. "HIGH" / "MEDIUM". */
+  confidence_level?: string | null;
+}
+
+/** Holdings endpoint envelope `meta` (CLAUDE.md §7 disclosure). */
+export interface HoldingsMeta {
+  holding_date: string | null;
+  source_name: string | null;
+  source_url: string | null;
+  fetched_at: string | null;
+  /** Raw source confidence, e.g. "HIGH" / "MEDIUM". */
+  confidence_level: string | null;
+  is_stale: boolean | null;
 }
 
 export interface IndustryExposureItem {

@@ -9,9 +9,9 @@ import SourceFooter from "@/components/common/SourceFooter";
 import Badge, { BadgeTone } from "@/components/common/Badge";
 import DataTable, { Column } from "@/components/tables/DataTable";
 import { EmptyState, ErrorState, LoadingSkeleton, errorToFriendlyMessage } from "@/components/common/States";
-import { getEtfCard, getConcentration, getHoldings, getIndustryExposure, getEtfPrices } from "@/lib/api";
-import type { Concentration, EtfCard, EtfPriceHistory, Holding, IndustryExposure } from "@/lib/types";
-import { formatInteger, formatNumber, formatPercent } from "@/lib/format";
+import { getEtfCard, getConcentration, getHoldings, getHoldingsWithMeta, getIndustryExposure, getEtfPrices } from "@/lib/api";
+import type { Concentration, EtfCard, EtfPriceHistory, Holding, HoldingsMeta, IndustryExposure } from "@/lib/types";
+import { formatDate, formatInteger, formatNumber, formatPercent } from "@/lib/format";
 
 const ReactECharts = dynamic(() => import("echarts-for-react"), { ssr: false });
 
@@ -48,6 +48,17 @@ function gradeTop10(top10Pct: number | null): { label: string; tone: BadgeTone }
   if (top10Pct < 50) return { label: "中", tone: "info" };
   if (top10Pct < 70) return { label: "中高", tone: "warning" };
   return { label: "高", tone: "error" };
+}
+
+// Backend holdings carry raw confidence text (HIGH / MEDIUM / LOW). Map to a
+// localized label + semantic tone for the disclosure badge (CLAUDE.md §7).
+function confidenceBadge(value: string | null | undefined): { label: string; tone: BadgeTone } | undefined {
+  if (!value) return undefined;
+  const v = value.toUpperCase();
+  if (v === "HIGH" || value === "高") return { label: "高", tone: "success" };
+  if (v === "MEDIUM" || value === "中") return { label: "中", tone: "warning" };
+  if (v === "LOW" || value === "低") return { label: "低", tone: "error" };
+  return { label: value, tone: "neutral" };
 }
 
 function managementTypeBadge(value: string | null): { label: string; tone: BadgeTone } {
@@ -100,11 +111,24 @@ const DEFAULT_MA_PERIODS: number[] = [5, 20];
 
 type FetchState = "loading" | "ok" | "empty" | "error";
 
-const HOLDINGS_COLUMNS: Column[] = [
-  { key: "asset_symbol", label: "個股代號", sortable: true },
-  { key: "asset_name", label: "個股名稱", sortable: true },
-  { key: "weight_pct", label: "權重", format: "percent", align: "right", sortable: true, decimals: 2 },
-];
+function buildHoldingsColumns(hasShares: boolean): Column[] {
+  const cols: Column[] = [
+    { key: "asset_symbol", label: "個股代號", sortable: true },
+    { key: "asset_name", label: "個股名稱", sortable: true },
+    { key: "weight_pct", label: "權重", format: "percent", align: "right", sortable: true, decimals: 2 },
+  ];
+  if (hasShares) {
+    cols.push({
+      key: "shares",
+      label: "持股股數",
+      format: "number",
+      align: "right",
+      sortable: true,
+      decimals: 0,
+    });
+  }
+  return cols;
+}
 
 export default function EtfDetailPage({ params }: { params: { symbol: string } }) {
   const symbol = decodeURIComponent(params.symbol);
@@ -131,6 +155,7 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
 
   // Full holdings (table)
   const [holdings, setHoldings] = useState<Holding[]>([]);
+  const [holdingsMeta, setHoldingsMeta] = useState<HoldingsMeta | null>(null);
   const [holdingsState, setHoldingsState] = useState<FetchState>("loading");
   const [holdingsErr, setHoldingsErr] = useState<{ code: string; message: string } | null>(null);
 
@@ -206,9 +231,10 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
 
   function loadHoldings() {
     setHoldingsState("loading");
-    getHoldings(symbol, { n: 200 })
-      .then((data) => {
+    getHoldingsWithMeta(symbol, { n: 200 })
+      .then(({ holdings: data, meta }) => {
         setHoldings(data);
+        setHoldingsMeta(meta);
         setHoldingsState(data.length === 0 ? "empty" : "ok");
       })
       .catch((e: unknown) => {
@@ -830,22 +856,81 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
 
       {/* 全部成分股表格 */}
       <div className="mb-space-8">
-        <h2 className="mb-space-4 text-h2 text-text-primary">全部成分股</h2>
-        {holdingsState === "loading" && <LoadingSkeleton variant="table" />}
-        {holdingsState === "error" && <ErrorState code={holdingsErr?.code} message={holdingsErr?.message} retry={loadHoldings} />}
-        {(holdingsState === "ok" || holdingsState === "empty") && (
-          <DataTable
-            columns={HOLDINGS_COLUMNS}
-            rows={[...holdings].sort((a, b) => b.weight_pct - a.weight_pct)}
-            searchable
-            exportCsv
-            dataDate={concentration?.holding_date ?? null}
-            emptyState={{
-              title: "尚無成分股資料",
-              description: "此 ETF 目前尚未匯入成分股持股資料。",
-            }}
-          />
-        )}
+        {(() => {
+          const meta = holdingsMeta;
+          const hasShares = holdings.some(
+            (h) => h.shares !== null && h.shares !== undefined
+          );
+          const isFullList = hasShares || holdings.length > 10;
+          const heading =
+            holdingsState === "ok" && isFullList
+              ? `完整成分股（共 ${formatInteger(holdings.length)} 檔）`
+              : "前 10 大持股";
+          const confidence = confidenceBadge(meta?.confidence_level);
+          return (
+            <>
+              <div className="mb-space-2 flex flex-wrap items-baseline gap-x-space-3 gap-y-space-1">
+                <h2 className="text-h2 text-text-primary">{heading}</h2>
+              </div>
+
+              {/* 資料來源揭露（CLAUDE.md §7）：資料來源 / 資料日期 / 可信度 / 過舊警示 */}
+              {meta && (meta.source_name || meta.holding_date || confidence) && (
+                <div className="mb-space-3 flex flex-wrap items-center gap-x-space-4 gap-y-space-1 text-small text-text-muted">
+                  {meta.source_name && (
+                    <span>
+                      資料來源：
+                      {meta.source_url ? (
+                        <a
+                          href={meta.source_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-accent-primary hover:underline"
+                        >
+                          {meta.source_name}
+                        </a>
+                      ) : (
+                        <span className="text-text-secondary">{meta.source_name}</span>
+                      )}
+                    </span>
+                  )}
+                  {meta.holding_date && <span>資料日期：{formatDate(meta.holding_date)}</span>}
+                  {confidence && (
+                    <span className="inline-flex items-center gap-space-1">
+                      可信度：
+                      <Badge label={confidence.label} tone={confidence.tone} />
+                    </span>
+                  )}
+                </div>
+              )}
+              {meta?.is_stale && (
+                <div className="mb-space-3">
+                  <Badge
+                    label={`資料可能過舊（最後更新：${formatDate(meta.holding_date)}）`}
+                    tone="warning"
+                  />
+                </div>
+              )}
+
+              {holdingsState === "loading" && <LoadingSkeleton variant="table" />}
+              {holdingsState === "error" && (
+                <ErrorState code={holdingsErr?.code} message={holdingsErr?.message} retry={loadHoldings} />
+              )}
+              {(holdingsState === "ok" || holdingsState === "empty") && (
+                <DataTable
+                  columns={buildHoldingsColumns(hasShares)}
+                  rows={[...holdings].sort((a, b) => b.weight_pct - a.weight_pct)}
+                  searchable
+                  exportCsv
+                  dataDate={meta?.holding_date ?? concentration?.holding_date ?? null}
+                  emptyState={{
+                    title: "尚無成分股資料",
+                    description: "此 ETF 目前尚未匯入成分股持股資料。",
+                  }}
+                />
+              )}
+            </>
+          );
+        })()}
       </div>
 
       {/* 持股變化 Timeline + AI 摘要 */}
