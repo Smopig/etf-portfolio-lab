@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
+import { chartColor } from "@/lib/chartColors";
 import { useRouter } from "next/navigation";
 import PageHeader from "@/components/layout/PageHeader";
 import MetricCard from "@/components/common/MetricCard";
@@ -134,16 +135,16 @@ export default function ProjectionPage() {
       backgroundColor: "transparent",
       grid: { left: 70, right: 24, top: 24, bottom: 40 },
       tooltip: { trigger: "axis" },
-      legend: { textStyle: { color: "var(--text-secondary)" } },
+      legend: { textStyle: { color: chartColor("--text-secondary") } },
       xAxis: {
         type: "category",
         data: singleResult.yearly_series.map((p) => `第${p.year}年`),
-        axisLabel: { color: "var(--text-secondary)" },
+        axisLabel: { color: chartColor("--text-secondary") },
       },
       yAxis: {
         type: "value",
-        axisLabel: { color: "var(--text-secondary)" },
-        splitLine: { lineStyle: { color: "var(--border-subtle)" } },
+        axisLabel: { color: chartColor("--text-secondary") },
+        splitLine: { lineStyle: { color: chartColor("--border-subtle") } },
       },
       series: [
         {
@@ -151,15 +152,15 @@ export default function ProjectionPage() {
           type: "line",
           showSymbol: false,
           data: singleResult.yearly_series.map((p) => p.value),
-          lineStyle: { color: "var(--series-1)" },
-          areaStyle: { color: "var(--series-1)", opacity: 0.1 },
+          lineStyle: { color: chartColor("--series-1") },
+          areaStyle: { color: chartColor("--series-1"), opacity: 0.1 },
         },
         {
           name: "累積投入本金",
           type: "line",
           showSymbol: false,
           data: singleResult.yearly_series.map((p) => p.contributed),
-          lineStyle: { color: "var(--series-2)", type: "dashed" },
+          lineStyle: { color: chartColor("--series-2"), type: "dashed" },
         },
       ],
     };
@@ -168,22 +169,22 @@ export default function ProjectionPage() {
   const scenarioChartOption = useMemo(() => {
     if (!scenarioResult) return null;
     const entries = Object.entries(scenarioResult.scenarios);
-    const colors = ["var(--series-3)", "var(--series-1)", "var(--series-4)"];
+    const colors = [chartColor("--series-3"), chartColor("--series-1"), chartColor("--series-4")];
     const years_axis = entries[0]?.[1]?.yearly_series.map((p) => `第${p.year}年`) ?? [];
     return {
       backgroundColor: "transparent",
       grid: { left: 70, right: 24, top: 24, bottom: 40 },
       tooltip: { trigger: "axis" },
-      legend: { textStyle: { color: "var(--text-secondary)" } },
+      legend: { textStyle: { color: chartColor("--text-secondary") } },
       xAxis: {
         type: "category",
         data: years_axis,
-        axisLabel: { color: "var(--text-secondary)" },
+        axisLabel: { color: chartColor("--text-secondary") },
       },
       yAxis: {
         type: "value",
-        axisLabel: { color: "var(--text-secondary)" },
-        splitLine: { lineStyle: { color: "var(--border-subtle)" } },
+        axisLabel: { color: chartColor("--text-secondary") },
+        splitLine: { lineStyle: { color: chartColor("--border-subtle") } },
       },
       series: entries.map(([key, scenario], i) => ({
         name: scenario.scenario_name ?? key,

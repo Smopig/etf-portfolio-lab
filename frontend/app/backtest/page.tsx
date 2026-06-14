@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
+import { chartColor } from "@/lib/chartColors";
 import { useRouter, useSearchParams } from "next/navigation";
 import PageHeader from "@/components/layout/PageHeader";
 import MetricCard from "@/components/common/MetricCard";
@@ -200,16 +201,16 @@ function BacktestContent() {
           backgroundColor: "transparent",
           grid: { left: 60, right: 24, top: 40, bottom: 40 },
           tooltip: { trigger: "axis" },
-          legend: { top: 0, textStyle: { color: "var(--text-secondary)" } },
+          legend: { top: 0, textStyle: { color: chartColor("--text-secondary") } },
           xAxis: {
             type: "category",
             data: allDates,
-            axisLabel: { color: "var(--text-secondary)" },
+            axisLabel: { color: chartColor("--text-secondary") },
           },
           yAxis: {
             type: "value",
-            axisLabel: { color: "var(--text-secondary)" },
-            splitLine: { lineStyle: { color: "var(--border-subtle)" } },
+            axisLabel: { color: chartColor("--text-secondary") },
+            splitLine: { lineStyle: { color: chartColor("--border-subtle") } },
           },
           series,
         };
@@ -224,15 +225,15 @@ function BacktestContent() {
         xAxis: {
           type: "category",
           data: result.drawdown_series.map((p) => p.date),
-          axisLabel: { color: "var(--text-secondary)" },
+          axisLabel: { color: chartColor("--text-secondary") },
         },
         yAxis: {
           type: "value",
           axisLabel: {
-            color: "var(--text-secondary)",
+            color: chartColor("--text-secondary"),
             formatter: (v: number) => `${(v * 100).toFixed(0)}%`,
           },
-          splitLine: { lineStyle: { color: "var(--border-subtle)" } },
+          splitLine: { lineStyle: { color: chartColor("--border-subtle") } },
         },
         series: [
           {
@@ -240,8 +241,8 @@ function BacktestContent() {
             type: "line",
             showSymbol: false,
             data: result.drawdown_series.map((p) => p.drawdown),
-            lineStyle: { color: "var(--status-error)" },
-            areaStyle: { color: "var(--status-error)", opacity: 0.15 },
+            lineStyle: { color: chartColor("--status-error") },
+            areaStyle: { color: chartColor("--status-error"), opacity: 0.15 },
           },
         ],
       }
