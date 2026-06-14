@@ -14,10 +14,13 @@ router = APIRouter(tags=["data-refresh"])
 def start_data_refresh(payload: dict | None = Body(default=None)) -> dict:
     payload = payload or {}
     opts = {
+        "listing": payload.get("listing", True),
         "prices": payload.get("prices", True),
         "price_range": payload.get("range", "1y"),
         "limit": payload.get("limit"),
         "market": payload.get("market", "both"),
+        "holdings": payload.get("holdings", True),
+        "dividends": payload.get("dividends", True),
     }
     status, state = refresh_service.start_refresh(**opts)
     return ok({"status": status, **state})

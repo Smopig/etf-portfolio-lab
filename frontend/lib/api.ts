@@ -470,10 +470,13 @@ export async function listFetchLogs(params?: {
 }
 
 export async function startDataRefresh(opts?: {
+  listing?: boolean;
   prices?: boolean;
   range?: string;
   limit?: number;
   market?: string;
+  holdings?: boolean;
+  dividends?: boolean;
 }): Promise<RefreshStartResponse> {
   return apiFetch<RefreshStartResponse>("/api/data/refresh", {
     method: "POST",
