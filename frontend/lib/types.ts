@@ -279,6 +279,32 @@ export interface RankingItem {
 }
 
 // ---------------------------------------------------------------------------
+// Dividend ranking
+// ---------------------------------------------------------------------------
+
+export interface DividendRankingRow {
+  etf_symbol: string;
+  name: string;
+  ttm_dividend: number | null;
+  latest_close: number | null;
+  ttm_yield_pct: number | null;
+  latest_dividend: number | null;
+  latest_ex_date: string | null;
+  frequency: string | null;
+  payout_per_100k: number | null;
+  source_name: string | null;
+  price_date: string | null;
+}
+
+export interface DividendRankingMeta {
+  order: "asc" | "desc";
+  frequency: string | null;
+  limit: number | null;
+  count: number;
+  disclosure: string;
+}
+
+// ---------------------------------------------------------------------------
 // Portfolio
 // ---------------------------------------------------------------------------
 

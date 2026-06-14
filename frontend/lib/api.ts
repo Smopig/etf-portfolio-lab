@@ -6,6 +6,8 @@ import type {
   DashboardSummary,
   DataQualityCheck,
   DataSource,
+  DividendRankingRow,
+  DividendRankingMeta,
   RefreshStartResponse,
   RefreshStatus,
   EtfCard,
@@ -257,6 +259,30 @@ export async function rankEtfs(params: {
       level: params.level,
     })}`
   );
+}
+
+export async function getDividendRankingWithMeta(params?: {
+  order?: "asc" | "desc";
+  frequency?: string;
+  limit?: number;
+}): Promise<{ rows: DividendRankingRow[]; meta: DividendRankingMeta }> {
+  const { data, meta } = await apiFetchWithMeta<DividendRankingRow[], DividendRankingMeta>(
+    `/api/etfs/dividends/ranking${qs({
+      order: params?.order,
+      frequency: params?.frequency,
+      limit: params?.limit,
+    })}`
+  );
+  return {
+    rows: data ?? [],
+    meta: meta ?? {
+      order: params?.order ?? "desc",
+      frequency: params?.frequency ?? null,
+      limit: params?.limit ?? null,
+      count: data?.length ?? 0,
+      disclosure: "",
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------
