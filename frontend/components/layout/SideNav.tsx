@@ -12,6 +12,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "研究入口", href: "/" },
   { label: "ETF 明細", href: "/etf" },
   { label: "ETF 比較", href: "/compare" },
+  { label: "配息排行", href: "/dividends" },
   { label: "組合建構", href: "/portfolio" },
   { label: "回測", href: "/backtest" },
   { label: "財務推算", href: "/projection" },
