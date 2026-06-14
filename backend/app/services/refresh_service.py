@@ -17,7 +17,13 @@ import time
 from collections.abc import Callable
 
 from app.core.database import SessionLocal
-from app.models import EtfMaster
+from app.models import (
+    EtfHolding,
+    EtfHoldingSnapshot,
+    EtfHoldingSnapshotItem,
+    EtfMaster,
+    EtfPrice,
+)
 from app.providers.data.factory import get_data_provider
 from app.services.data_fetch_service import run_fetch
 
@@ -31,6 +37,7 @@ def run_full_fetch(
     price_range: str = "1y",
     limit: int | None = None,
     market: str = "both",
+    holdings: bool = True,
 ) -> dict:
     """Run the full ETF-list + prices fetch, creating its own DB session.
 
@@ -134,17 +141,196 @@ def run_full_fetch(
             "failed": n_failed,
         }
 
-        report(
-            phase="done",
-            total=n_total,
-            processed=n_total,
-            succeeded=n_succeeded,
-            failed=n_failed,
-            message=f"完成：成功 {n_succeeded} / 失敗 {n_failed}",
-        )
+        if holdings:
+            holdings_summary = _run_holdings_phase(session, report)
+            result["holdings"] = holdings_summary
+            h_succ = holdings_summary["succeeded"]
+            h_fail = holdings_summary["failed"]
+            report(
+                phase="done",
+                total=holdings_summary["symbols_processed"],
+                processed=holdings_summary["symbols_processed"],
+                succeeded=h_succ,
+                failed=h_fail,
+                message=(
+                    f"完成：價格 成功 {n_succeeded} / 失敗 {n_failed}；"
+                    f"成分股 成功 {h_succ} / 失敗 {h_fail}"
+                ),
+            )
+        else:
+            report(
+                phase="done",
+                total=n_total,
+                processed=n_total,
+                succeeded=n_succeeded,
+                failed=n_failed,
+                message=f"完成：成功 {n_succeeded} / 失敗 {n_failed}",
+            )
         return result
     finally:
         session.close()
+
+
+def _run_holdings_phase(session, report) -> dict:
+    """Holdings phase: fetch Yahoo holdings for active ETFs with price data.
+
+    For each ETF:
+    - Replace existing rows with the same (etf_symbol, holding_date, asset_symbol)
+      (delete-then-insert for that snapshot date).
+    - Insert one EtfHoldingSnapshot row.
+
+    On provider failure or empty result: DO NOT delete existing rows.
+    Per-ETF failures never abort the job.
+    """
+    # ETFs that are active AND have at least one price row.
+    rows = (
+        session.query(EtfMaster.symbol)
+        .filter(EtfMaster.is_active.is_(True))
+        .filter(
+            session.query(EtfPrice.id)
+            .filter(EtfPrice.etf_symbol == EtfMaster.symbol)
+            .exists()
+        )
+        .order_by(EtfMaster.symbol)
+        .all()
+    )
+    symbols = [s for (s,) in rows]
+    n_total = len(symbols)
+    n_succ = 0
+    n_fail = 0
+
+    report(
+        phase="holdings",
+        total=n_total,
+        processed=0,
+        succeeded=0,
+        failed=0,
+        message=f"抓取成分股中 0/{n_total}",
+    )
+
+    provider = get_data_provider("yahoo-holdings")
+
+    for i, symbol in enumerate(symbols, start=1):
+        ok = False
+        try:
+            result = provider.fetch(symbol=symbol)
+            if result.records:
+                _replace_holdings_for_snapshot(session, symbol, result)
+                ok = True
+        except Exception:  # noqa: BLE001
+            ok = False
+
+        if ok:
+            n_succ += 1
+        else:
+            n_fail += 1
+
+        report(
+            phase="holdings",
+            total=n_total,
+            processed=i,
+            succeeded=n_succ,
+            failed=n_fail,
+            message=f"抓取成分股中 {i}/{n_total}",
+        )
+        time.sleep(0.4)
+
+    return {
+        "symbols_processed": n_total,
+        "succeeded": n_succ,
+        "failed": n_fail,
+    }
+
+
+def _replace_holdings_for_snapshot(session, symbol: str, result) -> None:
+    """Replace rows for each (etf_symbol, holding_date, asset_symbol) tuple
+    present in ``result.records`` and create a snapshot. Existing rows for
+    OTHER holding_dates are untouched. Commits at the end.
+    """
+    if not result.records:
+        return
+
+    # Snapshot date = max holding_date in records (or today).
+    snapshot_date = result.data_date or dt.date.today()
+    fetched_at = dt.datetime.utcnow()
+
+    # Delete the exact rows we're about to (re)insert, keyed by unique constraint.
+    keys_by_date: dict[dt.date, list[str]] = {}
+    for rec in result.records:
+        d = rec.get("holding_date")
+        if isinstance(d, dt.datetime):
+            d = d.date()
+        if not isinstance(d, dt.date):
+            continue
+        keys_by_date.setdefault(d, []).append(str(rec.get("asset_symbol")))
+
+    for d, asset_syms in keys_by_date.items():
+        session.query(EtfHolding).filter(
+            EtfHolding.etf_symbol == symbol,
+            EtfHolding.holding_date == d,
+            EtfHolding.asset_symbol.in_(asset_syms),
+        ).delete(synchronize_session=False)
+
+    # Insert fresh rows.
+    for rec in result.records:
+        d = rec.get("holding_date")
+        if isinstance(d, dt.datetime):
+            d = d.date()
+        session.add(
+            EtfHolding(
+                etf_symbol=symbol,
+                holding_date=d,
+                asset_symbol=str(rec.get("asset_symbol")) if rec.get("asset_symbol") is not None else None,
+                asset_name=rec.get("asset_name"),
+                weight=rec.get("weight"),
+                source_name=rec.get("source_name"),
+                source_url=rec.get("source_url"),
+                fetched_at=rec.get("fetched_at") or fetched_at,
+                confidence_level=rec.get("confidence_level"),
+            )
+        )
+
+    # Snapshot row (unique on etf_symbol, snapshot_date, source_name).
+    existing_snap = (
+        session.query(EtfHoldingSnapshot)
+        .filter_by(
+            etf_symbol=symbol,
+            snapshot_date=snapshot_date,
+            source_name=result.source_name,
+        )
+        .first()
+    )
+    if existing_snap is None:
+        snap = EtfHoldingSnapshot(
+            etf_symbol=symbol,
+            snapshot_date=snapshot_date,
+            source_name=result.source_name,
+            source_url=result.source_url,
+            fetched_at=fetched_at,
+        )
+        session.add(snap)
+        session.flush()
+        snap_id = snap.id
+    else:
+        existing_snap.source_url = result.source_url
+        existing_snap.fetched_at = fetched_at
+        snap_id = existing_snap.id
+        # Clear old items for this snapshot to avoid duplicates on re-run.
+        session.query(EtfHoldingSnapshotItem).filter_by(snapshot_id=snap_id).delete(
+            synchronize_session=False
+        )
+
+    for rec in result.records:
+        session.add(
+            EtfHoldingSnapshotItem(
+                snapshot_id=snap_id,
+                asset_symbol=str(rec.get("asset_symbol")) if rec.get("asset_symbol") is not None else None,
+                asset_name=rec.get("asset_name"),
+                weight=rec.get("weight"),
+            )
+        )
+
+    session.commit()
 
 
 class RefreshJob:

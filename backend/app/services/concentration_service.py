@@ -53,7 +53,9 @@ def get_top_holdings(
 ) -> list[dict]:
     """Return the top ``n`` holdings of ``etf_symbol`` by weight, descending.
 
-    Each item: {asset_symbol, asset_name, weight_fraction, weight_pct}.
+    Each item carries source metadata (CLAUDE.md §7): asset_symbol,
+    asset_name, weight, weight_fraction, weight_pct, holding_date,
+    source_name, source_url, confidence_level.
     """
     resolved_date = _resolve_holding_date(session, etf_symbol, holding_date)
     if resolved_date is None:
@@ -70,14 +72,63 @@ def get_top_holdings(
         {
             "asset_symbol": r.asset_symbol,
             "asset_name": r.asset_name,
+            "weight": float(r.weight) if r.weight is not None else None,
             "weight_fraction": frac,
             "weight_pct": frac * 100,
+            "holding_date": r.holding_date,
+            "source_name": r.source_name,
+            "source_url": r.source_url,
+            "confidence_level": r.confidence_level,
         }
         for r, frac in zip(rows, fractions)
     ]
 
     items.sort(key=lambda x: x["weight_fraction"], reverse=True)
     return items[:n]
+
+
+def get_holdings_meta(
+    session: Session,
+    etf_symbol: str,
+    holding_date: dt.date | None = None,
+) -> dict:
+    """Return holdings metadata for the holdings endpoint (CLAUDE.md §7)."""
+    resolved_date = _resolve_holding_date(session, etf_symbol, holding_date)
+    if resolved_date is None:
+        return {
+            "holding_date": None,
+            "source_name": None,
+            "source_url": None,
+            "fetched_at": None,
+            "confidence_level": None,
+            "is_stale": None,
+        }
+    row = (
+        session.query(EtfHolding)
+        .filter(
+            EtfHolding.etf_symbol == etf_symbol,
+            EtfHolding.holding_date == resolved_date,
+        )
+        .first()
+    )
+    if row is None:
+        return {
+            "holding_date": resolved_date,
+            "source_name": None,
+            "source_url": None,
+            "fetched_at": None,
+            "confidence_level": None,
+            "is_stale": None,
+        }
+    is_stale = (dt.date.today() - resolved_date).days > 7
+    return {
+        "holding_date": resolved_date,
+        "source_name": row.source_name,
+        "source_url": row.source_url,
+        "fetched_at": row.fetched_at.isoformat() if row.fetched_at else None,
+        "confidence_level": row.confidence_level,
+        "is_stale": is_stale,
+    }
 
 
 def get_concentration(

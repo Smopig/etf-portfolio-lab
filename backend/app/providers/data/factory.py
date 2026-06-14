@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from app.providers.data.base import BaseDataProvider
 from app.providers.data.csv_file_provider import CsvFileProvider, ExcelFileProvider
+from app.providers.data.finmind_holding_provider import FinMindHoldingProvider
 from app.providers.data.twse_etf_list_provider import TwseEtfListProvider
 from app.providers.data.twse_provider import FundCompanyProvider, TwseProvider
+from app.providers.data.yahoo_holding_provider import YahooHoldingProvider
 from app.providers.data.yahoo_price_provider import YahooPriceProvider
 
 _PROVIDERS: dict[str, type[BaseDataProvider]] = {
@@ -17,6 +19,8 @@ _PROVIDERS: dict[str, type[BaseDataProvider]] = {
     "twse": TwseProvider,
     "fund-company": FundCompanyProvider,
     "twse-etf-list": TwseEtfListProvider,
+    "finmind-holdings": FinMindHoldingProvider,
+    "yahoo-holdings": YahooHoldingProvider,
 }
 
 
