@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { formatNumber, formatPercent } from "@/lib/format";
+import { chartColor } from "@/lib/chartColors";
 
 const ReactECharts = dynamic(() => import("echarts-for-react"), { ssr: false });
 
@@ -35,6 +36,7 @@ function findPair(pairs: OverlapPair[], a: string, b: string): OverlapPair | nul
 }
 
 export default function OverlapHeatmap({ symbols, matrix, pairs, height = 360 }: OverlapHeatmapProps) {
+  const textSecondary = chartColor("--text-secondary");
   const data: [number, number, number][] = [];
   for (let i = 0; i < symbols.length; i++) {
     for (let j = 0; j < symbols.length; j++) {
@@ -70,13 +72,13 @@ export default function OverlapHeatmap({ symbols, matrix, pairs, height = 360 }:
       type: "category",
       data: symbols,
       splitArea: { show: true },
-      axisLabel: { color: "var(--text-secondary)" },
+      axisLabel: { color: textSecondary },
     },
     yAxis: {
       type: "category",
       data: symbols,
       splitArea: { show: true },
-      axisLabel: { color: "var(--text-secondary)" },
+      axisLabel: { color: textSecondary },
     },
     visualMap: {
       min: 0,
@@ -88,7 +90,7 @@ export default function OverlapHeatmap({ symbols, matrix, pairs, height = 360 }:
       inRange: {
         color: ["#0f2742", "#1d4ed8", "#3b82f6", "#93c5fd"],
       },
-      textStyle: { color: "var(--text-secondary)" },
+      textStyle: { color: textSecondary },
     },
     series: [
       {

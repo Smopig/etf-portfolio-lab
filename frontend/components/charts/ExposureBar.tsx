@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { formatPercent } from "@/lib/format";
+import { chartColor } from "@/lib/chartColors";
 
 const ReactECharts = dynamic(() => import("echarts-for-react"), { ssr: false });
 
@@ -17,6 +18,7 @@ export interface ExposureBarProps {
 
 export default function ExposureBar({ items, height = 320 }: ExposureBarProps) {
   const sorted = [...items].sort((a, b) => a.value - b.value);
+  const textSecondary = chartColor("--text-secondary");
   const option = {
     grid: { left: 120, right: 40, top: 20, bottom: 20 },
     tooltip: {
@@ -27,16 +29,20 @@ export default function ExposureBar({ items, height = 320 }: ExposureBarProps) {
         return `${p.name}<br/>權重：${formatPercent(p.value, { decimals: 2 })}`;
       },
     },
-    xAxis: { type: "value", axisLabel: { formatter: "{value}%" } },
+    xAxis: {
+      type: "value",
+      axisLabel: { formatter: "{value}%", color: textSecondary },
+    },
     yAxis: {
       type: "category",
       data: sorted.map((it) => it.name),
+      axisLabel: { color: textSecondary },
     },
     series: [
       {
         type: "bar",
         data: sorted.map((it) => it.value),
-        itemStyle: { color: "var(--series-1)" },
+        itemStyle: { color: chartColor("--series-1") },
       },
     ],
   };
