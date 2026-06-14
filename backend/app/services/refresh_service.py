@@ -272,9 +272,13 @@ def _run_holdings_phase(session, report) -> dict:
         ok = False
         try:
             result = None
-            # Yuanta-issued ETFs: use the issuer's authoritative full-list API
-            # (HIGH confidence). Fall back to Yahoo top-10 if it yields nothing.
-            if _is_yuanta(issuer):
+            # Try the Yuanta authoritative full-list API when the ETF is
+            # Yuanta-issued OR its issuer is unknown (many rows have a null
+            # issuer, including Yuanta funds like 0056/006201). The Yuanta API
+            # only returns data for Yuanta funds, so a non-Yuanta symbol simply
+            # yields empty and we fall back to Yahoo top-10. Known non-Yuanta
+            # issuers skip straight to Yahoo to avoid a wasted call.
+            if issuer is None or _is_yuanta(issuer):
                 result = yuanta_provider.fetch(symbol=symbol)
                 if not result.records:
                     result = yahoo_provider.fetch(symbol=symbol)
@@ -669,6 +673,13 @@ def _run_profile_phase(session, report) -> dict:
                 if value is not None:
                     setattr(master, field_name, value)
                     changed = True
+
+            # Every fund in the profile response is Yuanta-issued; backfill the
+            # issuer when missing so the holdings phase routes it to the Yuanta
+            # full-list API (many rows arrive from TWSE with a null issuer).
+            if not master.issuer:
+                master.issuer = "元大投信"
+                changed = True
 
             if changed:
                 master.source_name = rec.get("source_name")
