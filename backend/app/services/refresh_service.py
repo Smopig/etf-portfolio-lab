@@ -36,6 +36,7 @@ ProgressCallback = Callable[[dict], None]
 def run_full_fetch(
     progress: ProgressCallback | None = None,
     *,
+    listing: bool = True,
     prices: bool = True,
     price_range: str = "1y",
     limit: int | None = None,
@@ -43,15 +44,18 @@ def run_full_fetch(
     holdings: bool = True,
     dividends: bool = True,
 ) -> dict:
-    """Run the full ETF-list + prices fetch, creating its own DB session.
+    """Run per-phase ETF data fetches, creating its own DB session.
 
-    Mirrors ``scripts/fetch_all.py``'s flow: fetch the ETF master list (TWSE
-    ISIN listing pages), then -- unless ``prices`` is False -- fetch recent
-    daily prices for each symbol from Yahoo Finance.
+    Phases run in order: listing -> prices -> holdings -> dividends. Each phase
+    is independently gated by its flag and NEVER short-circuits a later phase,
+    so e.g. "only dividends" (``listing=prices=holdings=False, dividends=True``)
+    works. The symbol list used by later phases comes from the freshly fetched
+    TWSE master list when ``listing`` is True, otherwise from the existing
+    ``EtfMaster`` rows already in the DB.
 
     ``progress``, if given, is called with a state dict as the job advances:
-    ``{"phase": "listing"|"prices"|"done", "total": int, "processed": int,
-    "succeeded": int, "failed": int, "message": str}``.
+    ``{"phase": "listing"|"prices"|"holdings"|"dividends"|"done", "total": int,
+    "processed": int, "succeeded": int, "failed": int, "message": str}``.
 
     Returns a summary dict.
     """
@@ -62,91 +66,113 @@ def run_full_fetch(
 
     session = SessionLocal()
     try:
-        report(phase="listing", total=0, processed=0, succeeded=0, failed=0, message="抓取 ETF 清單中...")
-
-        provider = get_data_provider("twse-etf-list")
-        list_summary = run_fetch(session, provider, "etf_master", persist=True, market=market)
-
-        symbols = [s for (s,) in session.query(EtfMaster.symbol).order_by(EtfMaster.symbol).all()]
-
         result: dict = {
-            "list_summary": list_summary,
-            "symbols_total": len(symbols),
+            "list_summary": None,
+            "symbols_total": 0,
             "prices": None,
+            "holdings": None,
+            "dividends": None,
         }
+        done_parts: list[str] = []
 
-        if not prices:
+        # ── Phase: listing (ETF master list) ──────────────────────────────
+        if listing:
+            report(
+                phase="listing",
+                total=0,
+                processed=0,
+                succeeded=0,
+                failed=0,
+                message="抓取 ETF 清單中...",
+            )
+            provider = get_data_provider("twse-etf-list")
+            list_summary = run_fetch(
+                session, provider, "etf_master", persist=True, market=market
+            )
+            result["list_summary"] = list_summary
+            done_parts.append("ETF 清單已更新")
+
+        symbols = [
+            s
+            for (s,) in session.query(EtfMaster.symbol)
+            .order_by(EtfMaster.symbol)
+            .all()
+        ]
+        result["symbols_total"] = len(symbols)
+
+        # Edge case: nothing to work with (e.g. listing skipped + empty DB).
+        if not symbols and (prices or holdings or dividends):
             report(
                 phase="done",
                 total=0,
                 processed=0,
                 succeeded=0,
                 failed=0,
-                message="完成（未抓取價格）",
+                message="資料庫中沒有任何 ETF，請先更新 ETF 清單",
             )
             return result
 
-        if limit is not None:
-            symbols = symbols[:limit]
-
-        n_total = len(symbols)
-        n_succeeded = 0
-        n_failed = 0
-
-        report(
-            phase="prices",
-            total=n_total,
-            processed=0,
-            succeeded=0,
-            failed=0,
-            message=f"抓取價格中 0/{n_total}",
-        )
-
-        for i, symbol in enumerate(symbols, start=1):
-            price_provider = get_data_provider("yahoo-finance")
-            ok = False
-            try:
-                for suffix in (".TW", ".TWO"):
-                    yahoo_symbol = f"{symbol}{suffix}"
-                    summary = run_fetch(
-                        session,
-                        price_provider,
-                        "etf_prices",
-                        persist=True,
-                        symbol=yahoo_symbol,
-                        etf_symbol=symbol,
-                        range=price_range,
-                    )
-                    if summary["status"] == "success" and summary["rows_fetched"] > 0:
-                        ok = True
-                        break
-            except Exception:  # noqa: BLE001
-                ok = False
-
-            if ok:
-                n_succeeded += 1
-            else:
-                n_failed += 1
+        # ── Phase: prices ─────────────────────────────────────────────────
+        if prices:
+            price_symbols = symbols[:limit] if limit is not None else symbols
+            n_total = len(price_symbols)
+            n_succeeded = 0
+            n_failed = 0
 
             report(
                 phase="prices",
                 total=n_total,
-                processed=i,
-                succeeded=n_succeeded,
-                failed=n_failed,
-                message=f"抓取價格中 {i}/{n_total}",
+                processed=0,
+                succeeded=0,
+                failed=0,
+                message=f"抓取價格中 0/{n_total}",
             )
 
-            time.sleep(0.4)
+            for i, symbol in enumerate(price_symbols, start=1):
+                price_provider = get_data_provider("yahoo-finance")
+                ok = False
+                try:
+                    for suffix in (".TW", ".TWO"):
+                        yahoo_symbol = f"{symbol}{suffix}"
+                        summary = run_fetch(
+                            session,
+                            price_provider,
+                            "etf_prices",
+                            persist=True,
+                            symbol=yahoo_symbol,
+                            etf_symbol=symbol,
+                            range=price_range,
+                        )
+                        if summary["status"] == "success" and summary["rows_fetched"] > 0:
+                            ok = True
+                            break
+                except Exception:  # noqa: BLE001
+                    ok = False
 
-        result["prices"] = {
-            "symbols_processed": n_total,
-            "succeeded": n_succeeded,
-            "failed": n_failed,
-        }
+                if ok:
+                    n_succeeded += 1
+                else:
+                    n_failed += 1
 
-        done_parts = [f"價格 成功 {n_succeeded} / 失敗 {n_failed}"]
+                report(
+                    phase="prices",
+                    total=n_total,
+                    processed=i,
+                    succeeded=n_succeeded,
+                    failed=n_failed,
+                    message=f"抓取價格中 {i}/{n_total}",
+                )
 
+                time.sleep(0.4)
+
+            result["prices"] = {
+                "symbols_processed": n_total,
+                "succeeded": n_succeeded,
+                "failed": n_failed,
+            }
+            done_parts.append(f"價格 成功 {n_succeeded} / 失敗 {n_failed}")
+
+        # ── Phase: holdings ───────────────────────────────────────────────
         if holdings:
             holdings_summary = _run_holdings_phase(session, report)
             result["holdings"] = holdings_summary
@@ -155,6 +181,7 @@ def run_full_fetch(
                 f"失敗 {holdings_summary['failed']}"
             )
 
+        # ── Phase: dividends ──────────────────────────────────────────────
         if dividends:
             dividends_summary = _run_dividends_phase(session, report)
             result["dividends"] = dividends_summary
@@ -165,11 +192,11 @@ def run_full_fetch(
 
         report(
             phase="done",
-            total=n_total,
-            processed=n_total,
-            succeeded=n_succeeded,
-            failed=n_failed,
-            message="完成：" + "；".join(done_parts),
+            total=0,
+            processed=0,
+            succeeded=0,
+            failed=0,
+            message="完成：" + "；".join(done_parts) if done_parts else "完成",
         )
         return result
     finally:

@@ -84,6 +84,55 @@ def test_post_refresh_already_running(client, monkeypatch):
     assert body["status"] == "already_running"
 
 
+def test_post_refresh_dividends_only_threads_flags(client, monkeypatch):
+    """A dividends-only body must thread listing/prices/holdings False and
+    dividends True through to start_refresh (so only the dividends phase runs)."""
+    captured: dict = {}
+
+    def fake_start(**kwargs):
+        captured.update(kwargs)
+        return "started", dict(RUNNING_STATE)
+
+    monkeypatch.setattr(
+        "app.api.data_refresh.refresh_service.start_refresh", fake_start
+    )
+
+    resp = client.post(
+        "/api/data/refresh",
+        json={
+            "listing": False,
+            "prices": False,
+            "holdings": False,
+            "dividends": True,
+        },
+    )
+    assert resp.status_code == 200
+    assert captured["listing"] is False
+    assert captured["prices"] is False
+    assert captured["holdings"] is False
+    assert captured["dividends"] is True
+
+
+def test_post_refresh_empty_body_runs_all_phases(client, monkeypatch):
+    """Backward compat: a body with no flags => full run (all True)."""
+    captured: dict = {}
+
+    def fake_start(**kwargs):
+        captured.update(kwargs)
+        return "started", dict(RUNNING_STATE)
+
+    monkeypatch.setattr(
+        "app.api.data_refresh.refresh_service.start_refresh", fake_start
+    )
+
+    resp = client.post("/api/data/refresh", json={})
+    assert resp.status_code == 200
+    assert captured["listing"] is True
+    assert captured["prices"] is True
+    assert captured["holdings"] is True
+    assert captured["dividends"] is True
+
+
 def test_get_refresh_status(client, monkeypatch):
     monkeypatch.setattr(
         "app.api.data_refresh.refresh_service.get_status",

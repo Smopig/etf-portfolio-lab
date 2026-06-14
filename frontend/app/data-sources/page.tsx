@@ -166,9 +166,14 @@ export default function DataSourcesPage() {
     pollIntervalRef.current = setInterval(pollRefreshStatus, 3000);
   }
 
-  function handleStartRefresh() {
+  function handleStartRefresh(opts?: {
+    listing?: boolean;
+    prices?: boolean;
+    holdings?: boolean;
+    dividends?: boolean;
+  }) {
     setRefreshErr(null);
-    startDataRefresh()
+    startDataRefresh(opts)
       .then((res) => {
         setRefreshStatus(res);
         if (isRefreshActive(res)) {
@@ -247,27 +252,57 @@ export default function DataSourcesPage() {
 
       {/* 一鍵更新資料 */}
       <div className="mb-space-8 rounded-md border border-border-subtle bg-bg-surface p-space-4">
-        <div className="flex flex-wrap items-center justify-between gap-space-2">
-          <div>
-            <h2 className="text-h2 text-text-primary">一鍵更新資料</h2>
-            <p className="mt-space-1 text-small text-text-muted">
-              會從 TWSE／Yahoo 抓取 ETF 清單與價格，並抓取成分股（元大 ETF 取完整名單，其餘取前 10 大），需數分鐘。
-            </p>
-          </div>
+        <div>
+          <h2 className="text-h2 text-text-primary">更新資料</h2>
+          <p className="mt-space-1 text-small text-text-muted">
+            可單獨更新某一類資料，或一次更新全部。資料來自 TWSE／Yahoo，成分股的元大 ETF 取完整名單、其餘取前 10 大；每次只能執行一項作業，更新中其餘按鈕會停用。
+          </p>
+        </div>
+        <div className="mt-space-3 flex flex-wrap gap-space-2">
           <button
             type="button"
-            onClick={handleStartRefresh}
+            onClick={() =>
+              handleStartRefresh({
+                listing: true,
+                prices: true,
+                holdings: true,
+                dividends: true,
+              })
+            }
             disabled={isRefreshActive(refreshStatus)}
             className="rounded-sm border border-accent-primary bg-accent-primary px-space-4 py-2 text-body text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {isRefreshActive(refreshStatus) ? "更新中…" : "更新資料"}
+            全部更新
           </button>
+          {[
+            { label: "ETF 清單", flags: { listing: true, prices: false, holdings: false, dividends: false } },
+            { label: "價格", flags: { listing: false, prices: true, holdings: false, dividends: false } },
+            { label: "成分股", flags: { listing: false, prices: false, holdings: true, dividends: false } },
+            { label: "配息", flags: { listing: false, prices: false, holdings: false, dividends: true } },
+          ].map((b) => (
+            <button
+              key={b.label}
+              type="button"
+              onClick={() => handleStartRefresh(b.flags)}
+              disabled={isRefreshActive(refreshStatus)}
+              className="rounded-sm border border-border-subtle bg-bg-base px-space-4 py-2 text-body text-text-primary transition-opacity hover:border-accent-primary disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {b.label}
+            </button>
+          ))}
         </div>
+        <p className="mt-space-2 text-small text-text-muted">
+          全部更新＝清單＋價格＋成分股＋配息（需數分鐘）；其餘按鈕只更新該單一資料。
+        </p>
         {isRefreshActive(refreshStatus) && refreshStatus && (
           <p className="mt-space-3 text-small text-text-secondary">
             {refreshStatus.phase === "listing" && "抓取 ETF 清單中…"}
             {refreshStatus.phase === "prices" &&
               `抓取價格中 ${refreshStatus.processed}/${refreshStatus.total}（成功 ${refreshStatus.succeeded}／失敗 ${refreshStatus.failed}）`}
+            {refreshStatus.phase === "holdings" &&
+              `抓取成分股中 ${refreshStatus.processed}/${refreshStatus.total}（成功 ${refreshStatus.succeeded}／失敗 ${refreshStatus.failed}）`}
+            {refreshStatus.phase === "dividends" &&
+              `抓取配息中 ${refreshStatus.processed}/${refreshStatus.total}（成功 ${refreshStatus.succeeded}／失敗 ${refreshStatus.failed}）`}
           </p>
         )}
         {!isRefreshActive(refreshStatus) && refreshStatus && refreshStatus.phase === "done" && (
