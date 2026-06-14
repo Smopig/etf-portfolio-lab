@@ -20,7 +20,13 @@ from app.providers.data.yuanta_holding_provider import YuantaHoldingProvider
 
 def _build_json(stock_rows, future_rows=None, trandate="20260612") -> bytes:
     payload = {
-        "PCF": {"fundid": "1066", "markcd": "0050", "trandate": trandate, "nav": 102.14},
+        "PCF": {
+            "fundid": "1066",
+            "markcd": "0050",
+            "trandate": trandate,
+            "nav": 102.14,
+            "totalav": 2074315912926,
+        },
         "InKind": {"FundComposition": []},
         "FundWeights": {
             "Summary": {"code": "1066", "fundsize": 100000},
@@ -77,6 +83,13 @@ def test_happy_path_parses_full_stock_weights():
     # holding_date parsed from PCF.trandate (20260612), not today.
     assert rec["holding_date"].isoformat() == "2026-06-12"
     assert result.data_date.isoformat() == "2026-06-12"
+
+    # fund_meta captures AUM (totalav) + NAV from the PCF block (no extra call).
+    assert result.fund_meta is not None
+    assert result.fund_meta["aum"] == 2074315912926.0
+    assert result.fund_meta["nav"] == 102.14
+    assert result.fund_meta["nav_date"].isoformat() == "2026-06-12"
+    assert result.fund_meta["confidence_level"] == "HIGH"
 
     # URL is the PCF bridge with %2F-encoded slashes and the ticker present.
     assert "FuncId=PCF%2FDaily" in captured["url"]

@@ -21,6 +21,7 @@ def start_data_refresh(payload: dict | None = Body(default=None)) -> dict:
         "market": payload.get("market", "both"),
         "holdings": payload.get("holdings", True),
         "dividends": payload.get("dividends", True),
+        "profile": payload.get("profile", True),
     }
     status, state = refresh_service.start_refresh(**opts)
     return ok({"status": status, **state})

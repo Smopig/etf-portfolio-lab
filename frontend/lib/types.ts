@@ -78,6 +78,12 @@ export interface EtfCard {
   management_fee: number | null;
   custody_fee: number | null;
   dividend_frequency: string | null;
+  /** 基金規模 AUM in NTD; null for non-Yuanta ETFs. */
+  aum?: number | null;
+  /** 每股淨值 NAV; null for non-Yuanta ETFs. */
+  nav?: number | null;
+  /** NAV data date (YYYY-MM-DD). */
+  nav_date?: string | null;
   concentration: {
     holding_date: string | null;
     num_holdings: number;
@@ -302,6 +308,27 @@ export interface DividendRankingMeta {
   limit: number | null;
   count: number;
   disclosure: string;
+}
+
+// ---------------------------------------------------------------------------
+// Dividend recovery (填息天數)
+// ---------------------------------------------------------------------------
+
+export interface DividendRecoveryRow {
+  ex_date: string;
+  dividend_amount: number | null;
+  pre_ex_close: number | null;
+  recovered: boolean;
+  days_to_recover: number | null;
+  recovered_date: string | null;
+}
+
+export interface DividendRecoveryMeta {
+  source_name?: string | null;
+  source_url?: string | null;
+  data_date?: string | null;
+  disclosure?: string | null;
+  [key: string]: unknown;
 }
 
 // ---------------------------------------------------------------------------

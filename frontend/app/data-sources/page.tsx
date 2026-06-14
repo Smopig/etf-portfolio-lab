@@ -25,14 +25,35 @@ const SOURCE_COLUMNS: Column[] = [
   { key: "reliability_label", label: "資料可信度", sortable: true },
   { key: "update_frequency", label: "更新頻率", sortable: true },
   { key: "enabled_label", label: "啟用狀態", sortable: true },
-  { key: "base_url", label: "連結" },
+  {
+    key: "base_url",
+    label: "連結",
+    render: (value) =>
+      value ? (
+        <a
+          href={value as string}
+          target="_blank"
+          rel="noreferrer"
+          className="text-accent-primary hover:underline"
+        >
+          前往
+        </a>
+      ) : (
+        "—"
+      ),
+  },
 ];
 
 const QUALITY_COLUMNS: Column[] = [
   { key: "dataset_type", label: "資料類型", sortable: true },
   { key: "dataset_key", label: "資料識別", sortable: true },
   { key: "check_name", label: "檢查項目", sortable: true },
-  { key: "status", label: "狀態", sortable: true },
+  {
+    key: "status",
+    label: "狀態",
+    sortable: true,
+    render: (value) => <Badge label={value as string} tone={statusTone(value as string)} />,
+  },
   { key: "message", label: "說明" },
   { key: "checked_at", label: "檢查時間", format: "date", sortable: true },
 ];
@@ -223,13 +244,6 @@ export default function DataSourcesPage() {
     ...s,
     reliability_label: s.reliability_level ?? "未標示",
     enabled_label: s.enabled ? "啟用中" : "已停用",
-    base_url: s.base_url ? (
-      <a href={s.base_url} target="_blank" rel="noreferrer" className="text-accent-primary hover:underline">
-        前往
-      </a>
-    ) : (
-      "—"
-    ),
   }));
 
   const fetchLogRows = fetchLogs.map((f) => ({
@@ -243,7 +257,6 @@ export default function DataSourcesPage() {
     dataset_key: q.dataset_key ?? "—",
     message: q.message ?? "—",
     checked_at: q.checked_at ? formatDateTime(q.checked_at) : "—",
-    status: <Badge label={q.status} tone={statusTone(q.status)} />,
   }));
 
   return (

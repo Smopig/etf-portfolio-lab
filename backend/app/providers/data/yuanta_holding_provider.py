@@ -160,6 +160,18 @@ class YuantaHoldingProvider(BaseDataProvider):
         holding_date = data_date or dt.date.today()
         fetched_at = dt.datetime.utcnow()
 
+        # Fund-level meta from the PCF block: AUM (totalav) + NAV per unit.
+        # Only populated when the issuer reports a real value (never fabricated).
+        fund_meta = {
+            "aum": _to_float(pcf.get("totalav")),
+            "nav": _to_float(pcf.get("nav")),
+            "nav_date": data_date,
+            "source_name": self.name,
+            "source_url": url,
+            "fetched_at": fetched_at,
+            "confidence_level": "HIGH",
+        }
+
         records: list[dict] = []
         for key in _WEIGHT_KEYS:
             rows = fund_weights.get(key)
@@ -197,4 +209,5 @@ class YuantaHoldingProvider(BaseDataProvider):
             data_date=data_date or holding_date,
             reliability_level="high",
             errors=[],
+            fund_meta=fund_meta,
         )

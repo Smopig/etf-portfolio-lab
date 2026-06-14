@@ -27,6 +27,9 @@ class ProviderResult:
     data_date: dt.date | None = None
     reliability_level: str | None = None
     errors: list[str] = field(default_factory=list)
+    # Optional fund-level metadata captured alongside the records (e.g. AUM/NAV
+    # from a PCF block). None when the provider exposes no such block.
+    fund_meta: dict | None = None
 
     @property
     def ok(self) -> bool:

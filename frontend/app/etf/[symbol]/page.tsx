@@ -9,8 +9,8 @@ import SourceFooter from "@/components/common/SourceFooter";
 import Badge, { BadgeTone } from "@/components/common/Badge";
 import DataTable, { Column } from "@/components/tables/DataTable";
 import { EmptyState, ErrorState, LoadingSkeleton, errorToFriendlyMessage } from "@/components/common/States";
-import { getEtfCard, getConcentration, getHoldings, getHoldingsWithMeta, getIndustryExposure, getEtfPrices } from "@/lib/api";
-import type { Concentration, EtfCard, EtfPriceHistory, Holding, HoldingsMeta, IndustryExposure } from "@/lib/types";
+import { getEtfCard, getConcentration, getHoldings, getHoldingsWithMeta, getIndustryExposure, getEtfPrices, getDividendRecoveryWithMeta } from "@/lib/api";
+import type { Concentration, DividendRecoveryMeta, DividendRecoveryRow, EtfCard, EtfPriceHistory, Holding, HoldingsMeta, IndustryExposure } from "@/lib/types";
 import { formatDate, formatInteger, formatNumber, formatPercent } from "@/lib/format";
 import { chartColor, seriesPalette } from "@/lib/chartColors";
 
@@ -87,6 +87,15 @@ function formatCompactVolume(value: number | null | undefined): string {
   return formatInteger(value);
 }
 
+// Compact NTD amount in 億/兆 (mirrors formatCompactVolume style) for AUM.
+function formatCompactAum(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return "—";
+  if (value >= 1e12) return `${formatNumber(value / 1e12, { decimals: 2 })} 兆`;
+  if (value >= 1e8) return `${formatNumber(value / 1e8, { decimals: 0 })} 億`;
+  if (value >= 1e4) return `${formatNumber(value / 1e4, { decimals: 2 })} 萬`;
+  return formatInteger(value);
+}
+
 const MA_PERIODS = [5, 10, 20, 60] as const;
 const MA_COLORS: Record<number, string> = {
   5: "#f5a623",
@@ -157,6 +166,12 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
       prev.includes(period) ? prev.filter((p) => p !== period) : [...prev, period].sort((a, b) => a - b)
     );
   }
+
+  // Dividend recovery (填息天數)
+  const [recovery, setRecovery] = useState<DividendRecoveryRow[]>([]);
+  const [recoveryMeta, setRecoveryMeta] = useState<DividendRecoveryMeta | null>(null);
+  const [recoveryState, setRecoveryState] = useState<FetchState>("loading");
+  const [recoveryErr, setRecoveryErr] = useState<{ code: string; message: string } | null>(null);
 
   // Industry exposure (chart, with level toggle)
   const [level, setLevel] = useState<1 | 2>(1);
@@ -230,6 +245,20 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
       });
   }
 
+  function loadRecovery() {
+    setRecoveryState("loading");
+    getDividendRecoveryWithMeta(symbol)
+      .then(({ rows, meta }) => {
+        setRecovery(rows);
+        setRecoveryMeta(meta);
+        setRecoveryState(rows.length === 0 ? "empty" : "ok");
+      })
+      .catch((e: unknown) => {
+        setRecoveryErr(errorToFriendlyMessage(e));
+        setRecoveryState("error");
+      });
+  }
+
   function loadExposure(lvl: 1 | 2) {
     setExposureState("loading");
     getIndustryExposure(symbol, { level: lvl })
@@ -249,6 +278,7 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
     loadConcentration();
     loadTop10();
     loadHoldings();
+    loadRecovery();
     loadExposure(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [symbol]);
@@ -644,16 +674,28 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
           <StrategyField label="加權方式 / 風格" value={card.investment_style} />
           <StrategyField label="配息頻率" value={card.dividend_frequency} />
           <StrategyField
+            label="基金規模（AUM）"
+            value={card.aum !== null && card.aum !== undefined ? formatCompactAum(card.aum) : null}
+          />
+          <StrategyField
+            label="每股淨值（NAV）"
+            value={
+              card.nav !== null && card.nav !== undefined
+                ? `${formatNumber(card.nav, { decimals: 2 })} 元${card.nav_date ? `（${formatDate(card.nav_date)}）` : ""}`
+                : null
+            }
+          />
+          <StrategyField
             label="總管理費用率"
-            value={card.expense_ratio !== null ? formatPercent(card.expense_ratio, { decimals: 2, isFraction: card.expense_ratio <= 1 }) : null}
+            value={card.expense_ratio !== null ? `${formatNumber(card.expense_ratio, { decimals: 2 })}%` : null}
           />
           <StrategyField
             label="經理費"
-            value={card.management_fee !== null ? formatPercent(card.management_fee, { decimals: 2, isFraction: card.management_fee <= 1 }) : null}
+            value={card.management_fee !== null ? `${formatNumber(card.management_fee, { decimals: 4 })}%` : null}
           />
           <StrategyField
             label="保管費"
-            value={card.custody_fee !== null ? formatPercent(card.custody_fee, { decimals: 2, isFraction: card.custody_fee <= 1 }) : null}
+            value={card.custody_fee !== null ? `${formatNumber(card.custody_fee, { decimals: 2 })}%` : null}
           />
           <StrategyField label="發行商" value={card.issuer} />
         </div>
@@ -922,6 +964,71 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
             </>
           );
         })()}
+      </div>
+
+      {/* 填息天數 */}
+      <div className="mb-space-8">
+        <h2 className="mb-space-2 text-h2 text-text-primary">填息天數</h2>
+        <p className="mb-space-3 text-small text-text-muted">
+          填息天數＝除息後股價回到除息前收盤價所經過的交易日數。
+          {recoveryMeta?.source_name ? `資料來源：${recoveryMeta.source_name}。` : ""}
+          過去填息表現不代表未來，僅供研究分析參考。
+        </p>
+
+        {recoveryState === "loading" && <LoadingSkeleton variant="table" />}
+        {recoveryState === "error" && (
+          <ErrorState code={recoveryErr?.code} message={recoveryErr?.message} retry={loadRecovery} />
+        )}
+        {recoveryState === "empty" && (
+          <EmptyState
+            title="此 ETF 無配息紀錄"
+            description="目前尚未匯入此 ETF 的除息與填息資料，不會顯示虛構資料。"
+          />
+        )}
+        {recoveryState === "ok" && (
+          <div className="overflow-x-auto rounded-md border border-border-subtle bg-bg-surface">
+            <table className="w-full min-w-[640px] text-body">
+              <thead>
+                <tr className="border-b border-border-subtle text-small text-text-muted">
+                  <th className="px-space-3 py-space-2 text-left font-medium">除息日</th>
+                  <th className="px-space-3 py-space-2 text-right font-medium">配息金額</th>
+                  <th className="px-space-3 py-space-2 text-right font-medium">除息前收盤</th>
+                  <th className="px-space-3 py-space-2 text-right font-medium">填息天數</th>
+                  <th className="px-space-3 py-space-2 text-left font-medium">填息日</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...recovery]
+                  .sort((a, b) => (a.ex_date < b.ex_date ? 1 : -1))
+                  .map((r) => (
+                    <tr key={r.ex_date} className="border-b border-border-subtle last:border-0">
+                      <td className="px-space-3 py-space-2 text-left text-text-primary">
+                        {formatDate(r.ex_date)}
+                      </td>
+                      <td className="px-space-3 py-space-2 text-right text-text-primary">
+                        {r.dividend_amount !== null ? `${formatNumber(r.dividend_amount, { decimals: 2 })} 元` : "—"}
+                      </td>
+                      <td className="px-space-3 py-space-2 text-right text-text-primary">
+                        {r.pre_ex_close !== null ? formatNumber(r.pre_ex_close, { decimals: 2 }) : "—"}
+                      </td>
+                      <td className="px-space-3 py-space-2 text-right">
+                        {r.recovered ? (
+                          <span className="text-text-primary">
+                            {r.days_to_recover !== null ? `${formatInteger(r.days_to_recover)} 天` : "—"}
+                          </span>
+                        ) : (
+                          <Badge label="尚未填息" tone="warning" />
+                        )}
+                      </td>
+                      <td className="px-space-3 py-space-2 text-left text-text-secondary">
+                        {r.recovered ? formatDate(r.recovered_date) : "—"}
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* 持股變化 Timeline + AI 摘要 */}

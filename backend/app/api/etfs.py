@@ -19,6 +19,7 @@ from app.services.dividend_ranking_service import (
     VALID_FREQUENCIES,
     get_dividend_ranking,
 )
+from app.services.dividend_recovery_service import get_dividend_recovery
 from app.services.dashboard_service import (
     RANKING_METRICS,
     get_holdings_and_price_symbol_sets,
@@ -174,6 +175,27 @@ def get_etf_prices(
     db: Session = Depends(get_db),
 ) -> dict:
     return ok(get_price_history(db, symbol, start=start, end=end, limit=limit))
+
+
+@router.get("/{symbol}/dividend-recovery")
+def get_etf_dividend_recovery(
+    symbol: str,
+    limit: int = Query(default=12, ge=1, le=100),
+    db: Session = Depends(get_db),
+) -> dict:
+    rows = get_dividend_recovery(db, symbol, limit=limit)
+    return ok(
+        rows,
+        meta={
+            "symbol": symbol,
+            "count": len(rows),
+            "disclosure": (
+                "填息天數以已發放之配息與系統內收盤價計算，"
+                "「填息」指除息後收盤價首次回到除息前一交易日收盤價之交易日數；"
+                "尚未填息者標示為未填息。歷史資料不代表未來績效。"
+            ),
+        },
+    )
 
 
 @router.get("/{symbol}/concentration")
