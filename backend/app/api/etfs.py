@@ -15,6 +15,10 @@ from app.services.concentration_service import (
     get_holdings_meta,
     get_top_holdings,
 )
+from app.services.dividend_ranking_service import (
+    VALID_FREQUENCIES,
+    get_dividend_ranking,
+)
 from app.services.dashboard_service import (
     RANKING_METRICS,
     get_holdings_and_price_symbol_sets,
@@ -110,6 +114,35 @@ def overlap_etfs(symbols: str = Query(...), db: Session = Depends(get_db)) -> di
 def get_etf_price_range(symbols: str = Query(...), db: Session = Depends(get_db)) -> dict:
     syms = _split_symbols(symbols)
     return ok(get_price_ranges(db, syms))
+
+
+@router.get("/dividends/ranking")
+def get_dividends_ranking(
+    order: str = Query(default="desc"),
+    frequency: str | None = Query(default=None),
+    limit: int | None = Query(default=None, ge=1, le=1000),
+    db: Session = Depends(get_db),
+) -> dict:
+    if order not in ("asc", "desc"):
+        raise validation_error("order must be 'asc' or 'desc'.")
+    if frequency is not None and frequency not in VALID_FREQUENCIES:
+        raise validation_error(
+            f"frequency must be one of {', '.join(VALID_FREQUENCIES)}."
+        )
+    rows = get_dividend_ranking(db, order=order, frequency=frequency, limit=limit)
+    return ok(
+        rows,
+        meta={
+            "order": order,
+            "frequency": frequency,
+            "limit": limit,
+            "count": len(rows),
+            "disclosure": (
+                "殖利率以近 12 個月實際配息 (TTM) 計算，非單次配息乘以配息次數；"
+                "已排除尚未發放之配息。配息不代表未來績效。"
+            ),
+        },
+    )
 
 
 @router.get("/{symbol}")

@@ -7,6 +7,7 @@ from app.providers.data.csv_file_provider import CsvFileProvider, ExcelFileProvi
 from app.providers.data.finmind_holding_provider import FinMindHoldingProvider
 from app.providers.data.twse_etf_list_provider import TwseEtfListProvider
 from app.providers.data.twse_provider import FundCompanyProvider, TwseProvider
+from app.providers.data.yahoo_dividend_provider import YahooDividendProvider
 from app.providers.data.yahoo_holding_provider import YahooHoldingProvider
 from app.providers.data.yahoo_price_provider import YahooPriceProvider
 from app.providers.data.yuanta_holding_provider import YuantaHoldingProvider
@@ -22,6 +23,7 @@ _PROVIDERS: dict[str, type[BaseDataProvider]] = {
     "twse-etf-list": TwseEtfListProvider,
     "finmind-holdings": FinMindHoldingProvider,
     "yahoo-holdings": YahooHoldingProvider,
+    "yahoo-dividends": YahooDividendProvider,
     "yuanta-holdings": YuantaHoldingProvider,
 }
 

@@ -1,5 +1,6 @@
 from app.models.data_source import DataQualityCheck, DataSourceRegistry
 from app.models.dividend import EtfDividend
+from app.models.dividend_override import EtfDividendFrequencyOverride
 from app.models.etf import EtfMaster
 from app.models.fetch_log import FetchLog
 from app.models.holding import (
@@ -22,6 +23,7 @@ __all__ = [
     "EtfIndustryExposure",
     "EtfPrice",
     "EtfDividend",
+    "EtfDividendFrequencyOverride",
     "Portfolio",
     "PortfolioItem",
     "BacktestRun",
