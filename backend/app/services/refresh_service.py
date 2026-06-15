@@ -227,6 +227,18 @@ def _is_yuanta(issuer: str | None) -> bool:
     return "元大" in issuer or "yuanta" in low
 
 
+def _is_fuhua(issuer: str | None) -> bool:
+    """True if the ETF issuer is Fuhua (復華投信).
+
+    Matches the Chinese name fragment "復華" or the English "fuhua"/"fh"
+    (case-insensitive). Missing/ambiguous issuers return False.
+    """
+    if not issuer:
+        return False
+    low = issuer.lower()
+    return "復華" in issuer or "fuhua" in low
+
+
 def _run_holdings_phase(session, report) -> dict:
     """Holdings phase: fetch Yahoo holdings for active ETFs with price data.
 
@@ -267,26 +279,50 @@ def _run_holdings_phase(session, report) -> dict:
 
     yahoo_provider = get_data_provider("yahoo-holdings")
     yuanta_provider = get_data_provider("yuanta-holdings")
+    fuhua_provider = get_data_provider("fuhua-holdings")
 
     for i, (symbol, issuer) in enumerate(symbols, start=1):
         ok = False
         try:
             result = None
-            # Try the Yuanta authoritative full-list API when the ETF is
-            # Yuanta-issued OR its issuer is unknown (many rows have a null
-            # issuer, including Yuanta funds like 0056/006201). The Yuanta API
-            # only returns data for Yuanta funds, so a non-Yuanta symbol simply
-            # yields empty and we fall back to Yahoo top-10. Known non-Yuanta
-            # issuers skip straight to Yahoo to avoid a wasted call.
-            if issuer is None or _is_yuanta(issuer):
-                result = yuanta_provider.fetch(symbol=symbol)
-                if not result.records:
-                    result = yahoo_provider.fetch(symbol=symbol)
+            # Pick the cascade of full-list providers to try, ending with the
+            # Yahoo top-10 fallback. Each issuer API only returns data for its
+            # own funds (a non-matching symbol yields empty), so when the issuer
+            # is unknown (many rows have a null issuer) we try every issuer API
+            # in turn. Known issuers skip straight to their own API to avoid
+            # wasted calls.
+            if issuer is None:
+                chain = [yuanta_provider, fuhua_provider, yahoo_provider]
+            elif _is_yuanta(issuer):
+                chain = [yuanta_provider, yahoo_provider]
+            elif _is_fuhua(issuer):
+                chain = [fuhua_provider, yahoo_provider]
             else:
-                result = yahoo_provider.fetch(symbol=symbol)
+                chain = [yahoo_provider]
+
+            matched = None
+            for provider in chain:
+                result = provider.fetch(symbol=symbol)
+                if result.records:
+                    matched = provider
+                    break
             if result.records:
                 _replace_holdings_for_snapshot(session, symbol, result)
                 _maybe_update_aum_nav(session, symbol, result)
+                # Backfill issuer when an issuer-specific API matched a null-issuer
+                # ETF, so future refreshes route straight to it (skipping wasted
+                # probes) and the issuer is shown correctly in the UI.
+                if issuer is None:
+                    master = (
+                        session.query(EtfMaster)
+                        .filter(EtfMaster.symbol == symbol)
+                        .first()
+                    )
+                    if master is not None and not master.issuer:
+                        if matched is fuhua_provider:
+                            master.issuer = "復華投信"
+                        elif matched is yuanta_provider:
+                            master.issuer = "元大投信"
                 ok = True
         except Exception:  # noqa: BLE001
             # Roll back so a failed ETF (e.g. an integrity error) does NOT
