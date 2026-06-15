@@ -5,6 +5,7 @@ from __future__ import annotations
 from app.providers.data.base import BaseDataProvider
 from app.providers.data.csv_file_provider import CsvFileProvider, ExcelFileProvider
 from app.providers.data.finmind_holding_provider import FinMindHoldingProvider
+from app.providers.data.fuhua_holding_provider import FuhuaHoldingProvider
 from app.providers.data.twse_etf_list_provider import TwseEtfListProvider
 from app.providers.data.twse_provider import FundCompanyProvider, TwseProvider
 from app.providers.data.yahoo_dividend_provider import YahooDividendProvider
@@ -27,6 +28,7 @@ _PROVIDERS: dict[str, type[BaseDataProvider]] = {
     "yahoo-dividends": YahooDividendProvider,
     "yuanta-holdings": YuantaHoldingProvider,
     "yuanta-profile": YuantaProfileProvider,
+    "fuhua-holdings": FuhuaHoldingProvider,
 }
 
 
