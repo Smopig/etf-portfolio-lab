@@ -239,6 +239,14 @@ def _is_fuhua(issuer: str | None) -> bool:
     return "復華" in issuer or "fuhua" in low
 
 
+def _is_fubon(issuer: str | None) -> bool:
+    """True if the ETF issuer is Fubon (富邦投信)."""
+    if not issuer:
+        return False
+    low = issuer.lower()
+    return "富邦" in issuer or "fubon" in low
+
+
 def _run_holdings_phase(session, report) -> dict:
     """Holdings phase: fetch Yahoo holdings for active ETFs with price data.
 
@@ -280,6 +288,7 @@ def _run_holdings_phase(session, report) -> dict:
     yahoo_provider = get_data_provider("yahoo-holdings")
     yuanta_provider = get_data_provider("yuanta-holdings")
     fuhua_provider = get_data_provider("fuhua-holdings")
+    fubon_provider = get_data_provider("fubon-holdings")
 
     for i, (symbol, issuer) in enumerate(symbols, start=1):
         ok = False
@@ -292,11 +301,13 @@ def _run_holdings_phase(session, report) -> dict:
             # in turn. Known issuers skip straight to their own API to avoid
             # wasted calls.
             if issuer is None:
-                chain = [yuanta_provider, fuhua_provider, yahoo_provider]
+                chain = [yuanta_provider, fuhua_provider, fubon_provider, yahoo_provider]
             elif _is_yuanta(issuer):
                 chain = [yuanta_provider, yahoo_provider]
             elif _is_fuhua(issuer):
                 chain = [fuhua_provider, yahoo_provider]
+            elif _is_fubon(issuer):
+                chain = [fubon_provider, yahoo_provider]
             else:
                 chain = [yahoo_provider]
 
@@ -321,6 +332,8 @@ def _run_holdings_phase(session, report) -> dict:
                     if master is not None and not master.issuer:
                         if matched is fuhua_provider:
                             master.issuer = "復華投信"
+                        elif matched is fubon_provider:
+                            master.issuer = "富邦投信"
                         elif matched is yuanta_provider:
                             master.issuer = "元大投信"
                 ok = True
