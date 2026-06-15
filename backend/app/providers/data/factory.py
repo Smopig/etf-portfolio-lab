@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from app.providers.data.base import BaseDataProvider
+from app.providers.data.capital_holding_provider import CapitalHoldingProvider
 from app.providers.data.cathay_holding_provider import CathayHoldingProvider
 from app.providers.data.csv_file_provider import CsvFileProvider, ExcelFileProvider
 from app.providers.data.finmind_holding_provider import FinMindHoldingProvider
@@ -33,6 +34,7 @@ _PROVIDERS: dict[str, type[BaseDataProvider]] = {
     "fuhua-holdings": FuhuaHoldingProvider,
     "fubon-holdings": FubonHoldingProvider,
     "cathay-holdings": CathayHoldingProvider,
+    "capital-holdings": CapitalHoldingProvider,
 }
 
 
