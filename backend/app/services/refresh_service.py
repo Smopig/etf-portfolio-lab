@@ -263,6 +263,14 @@ def _is_capital(issuer: str | None) -> bool:
     return "群益" in issuer or "capital" in low
 
 
+def _is_kgi(issuer: str | None) -> bool:
+    """True if the ETF issuer is KGI (凱基投信)."""
+    if not issuer:
+        return False
+    low = issuer.lower()
+    return "凱基" in issuer or "kgi" in low
+
+
 def _run_holdings_phase(session, report) -> dict:
     """Holdings phase: fetch Yahoo holdings for active ETFs with price data.
 
@@ -307,6 +315,7 @@ def _run_holdings_phase(session, report) -> dict:
     fubon_provider = get_data_provider("fubon-holdings")
     cathay_provider = get_data_provider("cathay-holdings")
     capital_provider = get_data_provider("capital-holdings")
+    kgi_provider = get_data_provider("kgi-holdings")
 
     for i, (symbol, issuer) in enumerate(symbols, start=1):
         ok = False
@@ -325,6 +334,7 @@ def _run_holdings_phase(session, report) -> dict:
                     fubon_provider,
                     cathay_provider,
                     capital_provider,
+                    kgi_provider,
                     yahoo_provider,
                 ]
             elif _is_yuanta(issuer):
@@ -337,6 +347,8 @@ def _run_holdings_phase(session, report) -> dict:
                 chain = [cathay_provider, yahoo_provider]
             elif _is_capital(issuer):
                 chain = [capital_provider, yahoo_provider]
+            elif _is_kgi(issuer):
+                chain = [kgi_provider, yahoo_provider]
             else:
                 chain = [yahoo_provider]
 
@@ -367,6 +379,8 @@ def _run_holdings_phase(session, report) -> dict:
                             master.issuer = "國泰投信"
                         elif matched is capital_provider:
                             master.issuer = "群益投信"
+                        elif matched is kgi_provider:
+                            master.issuer = "凱基投信"
                         elif matched is yuanta_provider:
                             master.issuer = "元大投信"
                 ok = True

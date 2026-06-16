@@ -8,6 +8,7 @@ from app.providers.data.cathay_holding_provider import CathayHoldingProvider
 from app.providers.data.csv_file_provider import CsvFileProvider, ExcelFileProvider
 from app.providers.data.finmind_holding_provider import FinMindHoldingProvider
 from app.providers.data.fubon_holding_provider import FubonHoldingProvider
+from app.providers.data.kgi_holding_provider import KgiHoldingProvider
 from app.providers.data.fuhua_holding_provider import FuhuaHoldingProvider
 from app.providers.data.twse_etf_list_provider import TwseEtfListProvider
 from app.providers.data.twse_provider import FundCompanyProvider, TwseProvider
@@ -35,6 +36,7 @@ _PROVIDERS: dict[str, type[BaseDataProvider]] = {
     "fubon-holdings": FubonHoldingProvider,
     "cathay-holdings": CathayHoldingProvider,
     "capital-holdings": CapitalHoldingProvider,
+    "kgi-holdings": KgiHoldingProvider,
 }
 
 
