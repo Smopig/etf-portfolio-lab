@@ -48,6 +48,15 @@ function confidenceBadge(value: string | null | undefined): { label: string; ton
   return { label: value, tone: "neutral" };
 }
 
+// Whether the holdings list is the issuer's full constituent list or only a
+// Yahoo top-10 fallback. Surfaces data completeness so users don't mistake a
+// 10-row fallback for a fund that genuinely holds 10 names (CLAUDE.md §7).
+function completenessBadge(isFullList: boolean): { label: string; tone: BadgeTone } {
+  return isFullList
+    ? { label: "完整名單", tone: "success" }
+    : { label: "僅前十大", tone: "warning" };
+}
+
 function managementTypeBadge(value: string | null): { label: string; tone: BadgeTone } {
   if (value === "主動" || value === "active" || value === "Active") {
     return { label: "主動", tone: "warning" };
@@ -900,11 +909,23 @@ export default function EtfDetailPage({ params }: { params: { symbol: string } }
               ? `完整成分股（共 ${formatInteger(holdings.length)} 檔）`
               : "前 10 大持股";
           const confidence = confidenceBadge(meta?.confidence_level);
+          const completeness =
+            holdingsState === "ok" && holdings.length > 0
+              ? completenessBadge(isFullList)
+              : undefined;
           return (
             <>
-              <div className="mb-space-2 flex flex-wrap items-baseline gap-x-space-3 gap-y-space-1">
+              <div className="mb-space-2 flex flex-wrap items-center gap-x-space-3 gap-y-space-1">
                 <h2 className="text-h2 text-text-primary">{heading}</h2>
+                {completeness && (
+                  <Badge label={completeness.label} tone={completeness.tone} />
+                )}
               </div>
+              {completeness && !isFullList && (
+                <p className="mb-space-3 text-small text-text-muted">
+                  此 ETF 尚無完整成分股來源，僅顯示資料來源提供的前十大持股；完整名單請以發行商公告為準。
+                </p>
+              )}
 
               {/* 資料來源揭露（CLAUDE.md §7）：資料來源 / 資料日期 / 可信度 / 過舊警示 */}
               {meta && (meta.source_name || meta.holding_date || confidence) && (
